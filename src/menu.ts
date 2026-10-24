@@ -18,6 +18,8 @@ export interface MenuRequest {
   title: string;
   entries: MenuEntry[];
   leaveLabel: string;
+  /** True in a group, where Esc can leave. The top level has no Back, so Esc does nothing there. */
+  canGoBack: boolean;
 }
 
 export interface MenuDeps {
@@ -50,14 +52,14 @@ async function runAction(action: MenuAction, { printError, colors = chalk }: Men
 async function runLevel(
   title: string,
   entries: MenuEntry[],
-  leaveLabel: string,
+  canGoBack: boolean,
   deps: MenuDeps,
 ): Promise<void> {
-  const request = { title, entries, leaveLabel };
+  const request = { title, entries, canGoBack, leaveLabel: canGoBack ? "Back" : "Exit" };
 
   for (let entry = await deps.choose(request); entry; entry = await deps.choose(request)) {
     if (isGroup(entry)) {
-      await runLevel(entry.name, entry.entries, "Back", deps);
+      await runLevel(entry.name, entry.entries, true, deps);
 
       continue;
     }
@@ -72,5 +74,5 @@ export async function runMenu(deps: MenuDeps): Promise<void> {
     throw new UsageError("the menu needs a terminal. Run a command instead, such as `skills`");
   }
 
-  await runLevel(deps.title, deps.entries, "Exit", deps);
+  await runLevel(deps.title, deps.entries, false, deps);
 }

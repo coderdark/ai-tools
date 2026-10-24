@@ -266,3 +266,24 @@ test("runUninstall stops with an error when the chosen skill is not in the list"
   );
   assert.equal(await exists(destination(results, "claude", "review-pr")), true);
 });
+
+test("runUninstall cancels without asking more when the skill choice is cancelled", async (t) => {
+  const { results } = await setup(t, { claude: ["review-pr"] });
+  const { deps, log } = makeDeps(results, {
+    prompts: {
+      skill: async () => undefined,
+      agents: async () => {
+        throw new Error("unexpected prompt: agents");
+      },
+      confirm: async () => {
+        throw new Error("unexpected prompt: confirm");
+      },
+    },
+  });
+
+  await runUninstall(deps);
+
+  assert.deepEqual(log.output, ["Cancelled. Nothing was removed."]);
+  assert.deepEqual(log.progress, []);
+  assert.ok(await exists(destination(results, "claude", "review-pr")));
+});

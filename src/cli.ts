@@ -1,15 +1,19 @@
 #!/usr/bin/env node
-import { select } from "@inquirer/prompts";
 import { defaultScanEnv, scanAgents } from "./agents/scan.ts";
 import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
 import { runListSkills } from "./list-skills-command.ts";
-import { runMenu, type MenuEntry, type MenuRequest } from "./menu.ts";
+import { runMenu, type MenuEntry } from "./menu.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
-import { terminalBrowsePrompts, terminalPrompts, terminalUninstallPrompts } from "./prompts.ts";
+import {
+  chooseMenuEntry,
+  terminalBrowsePrompts,
+  terminalPrompts,
+  terminalUninstallPrompts,
+} from "./prompts.ts";
 import { runCli } from "./run-cli.ts";
 import { runUninstall } from "./uninstall-command.ts";
 
@@ -71,20 +75,6 @@ const menuEntries: MenuEntry[] = [
   },
   { name: "Agents", run: agents },
 ];
-
-const LEAVE_MENU = -1;
-
-async function chooseMenuEntry({ title, entries, leaveLabel }: MenuRequest): Promise<MenuEntry | undefined> {
-  const index = await select<number>({
-    message: title,
-    choices: [
-      ...entries.map(({ name }, position) => ({ name, value: position })),
-      { name: leaveLabel, value: LEAVE_MENU },
-    ],
-  });
-
-  return index === LEAVE_MENU ? undefined : entries[index];
-}
 
 function menu(): Promise<void> {
   return runMenu({

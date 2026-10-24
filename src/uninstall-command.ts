@@ -8,7 +8,8 @@ import { listInstalledSkills, type InstalledSkill } from "./skills/list.ts";
 import { uninstallSkill } from "./skills/uninstall.ts";
 
 export interface UninstallPrompts {
-  skill(skills: InstalledSkill[]): Promise<string>;
+  /** Resolves to the chosen skill's name, or `undefined` when the user cancels the choice. */
+  skill(skills: InstalledSkill[]): Promise<string | undefined>;
   agents(skill: InstalledSkill): Promise<AgentId[]>;
   confirm(name: string, agentNames: string[]): Promise<boolean>;
 }
@@ -22,11 +23,18 @@ export interface UninstallCommandDeps {
   colors?: ChalkInstance;
 }
 
+const CANCELLED_MESSAGE = "Cancelled. Nothing was removed.";
+
 async function chooseSkill(
   installed: InstalledSkill[],
   { prompts }: UninstallCommandDeps,
-): Promise<InstalledSkill> {
+): Promise<InstalledSkill | undefined> {
   const name = await prompts.skill(installed);
+
+  if (name === undefined) {
+    return undefined;
+  }
+
   const skill = installed.find((candidate) => candidate.name === name);
 
   if (!skill) {
@@ -87,6 +95,13 @@ export async function runUninstall(deps: UninstallCommandDeps): Promise<void> {
   }
 
   const skill = await chooseSkill(installed, deps);
+
+  if (!skill) {
+    print(CANCELLED_MESSAGE);
+
+    return;
+  }
+
   const targets = await chooseTargets(skill, deps);
 
   const confirmed = await prompts.confirm(
@@ -95,7 +110,7 @@ export async function runUninstall(deps: UninstallCommandDeps): Promise<void> {
   );
 
   if (!confirmed) {
-    print("Cancelled. Nothing was removed.");
+    print(CANCELLED_MESSAGE);
 
     return;
   }

@@ -37,7 +37,9 @@ Run it with no command to get a menu. It has two entries: **Skills** (list, inst
 node dist/cli.js
 ```
 
-In the menu, **List skills** opens a list you move through with the arrow keys. The line under the highlighted skill shows which agents have it. Press Enter on a skill to see its folders. Press Esc, or choose **Back**, to leave the list.
+In the menu, **List skills** opens a list you move through with the arrow keys. The line under the highlighted skill shows which agents have it. Press Enter on a skill to see its folders. Press Esc to leave the list.
+
+Esc also goes back from the Skills menu, and it cancels the skill list in uninstall. At the top menu Esc does nothing, so you cannot close the tool by accident. Choose **Exit** or press Ctrl+C there.
 
 The menu needs a terminal. In a script it stops with an error, so use a command such as `skills` there. If an action fails, for example because a skill already exists, the error shows in red and you go back to the menu.
 

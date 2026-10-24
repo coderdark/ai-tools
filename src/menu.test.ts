@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Chalk } from "chalk";
 import { UsageError } from "./install-command.ts";
-import { runMenu, type MenuDeps, type MenuEntry } from "./menu.ts";
+import { runMenu, type MenuDeps, type MenuEntry, type MenuRequest } from "./menu.ts";
 import { SelectionError } from "./selection.ts";
 
 const LEAVE = "leave";
@@ -197,4 +197,26 @@ test("runMenu prints a blank line after each action, but not when opening or lea
   await runMenu(deps);
 
   assert.deepEqual(log.output, ["alpha  Claude", ""]);
+});
+
+test("runMenu tells the chooser that only a group can be left with Esc", async () => {
+  const requests: MenuRequest[] = [];
+  const { deps } = makeDeps(
+    [],
+    (log) => [{ name: "Skills", entries: [action(log, "List")] }],
+    {
+      choose: async (request) => {
+        requests.push(request);
+
+        return requests.length === 1 ? request.entries[0] : undefined;
+      },
+    },
+  );
+
+  await runMenu(deps);
+
+  assert.deepEqual(
+    requests.map(({ title, canGoBack }) => `${title}: ${canGoBack}`),
+    ["What would you like to do?: false", "Skills: true", "What would you like to do?: false"],
+  );
 });
