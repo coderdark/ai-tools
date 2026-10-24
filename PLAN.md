@@ -24,21 +24,20 @@ On the machine this was planned on, the scan finds Cursor, Claude, and ChatGPT. 
 
 ```mermaid
 flowchart TD
-  start["ai-tools"] --> menu["Skills or Agents"]
+  start["ai-tools"] --> menu["Agents or Skills"]
   menu --> show["Agents: scan, then print found and missing agents"]
-  menu --> skillsMenu["Skills: list, install, uninstall, or Back"]
+  menu --> skillsMenu["Skills: list, install, or uninstall"]
   skillsMenu --> scan["Install: scan home, PATH, and Applications"]
   scan --> path["Prompt for the skill folder"]
   path --> pick["Checkbox of found agents, plus All"]
   pick --> confirm["Confirm"]
   confirm --> copy["Copy into each chosen skill directory"]
   copy --> done["The tool exits"]
-  skillsMenu -->|"Back or Esc"| menu
   show --> done
   menu -->|"Esc"| leave["The tool exits"]
 ```
 
-`ai-tools` with no command opens a menu with **Skills** and **Agents**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** opens a list of the found agents. Each action scans when it is chosen. An action runs once and the tool then exits, the same as the command of the same name. **Back** (or Esc) in **Skills** returns to the top menu. The user leaves the top menu with Esc (exit code 0) or Ctrl+C (exit code 130). The top menu has no **Exit** row: its footer reads `↑↓ navigate • ⏎ select • esc exit`. `ai-tools agents` prints the whole scan, found and missing agents, with no menu. **List skills** opens a list of the installed skills that the user moves through, and `ai-tools skills` prints the same skills as plain lines with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
+`ai-tools` with no command opens a menu with **Agents** and **Skills**, in that order. **Agents** opens a list of the found agents. **Skills** opens a second menu with **List skills**, **Install a skill** and **Uninstall a skill**. Each action scans when it is chosen. An action runs once and the tool then exits, the same as the command of the same name. The user leaves any menu with Esc (exit code 0) or Ctrl+C (exit code 130). No menu has an **Exit** or **Back** row: the footer reads `↑↓ navigate • ⏎ select • esc exit`, and there is no way back from **Skills** to the top menu. `ai-tools agents` prints the whole scan, found and missing agents, with no menu. **List skills** opens a list of the installed skills that the user moves through, and `ai-tools skills` prints the same skills as plain lines with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
 
 Install prompts, in order:
 
@@ -95,10 +94,10 @@ Found agents are green, missing agents are dim, and skill paths are cyan. After 
 
 ## Menu
 
-The menu is a launcher: the user picks one action, it runs once, and the tool exits, the same as the matching command. This is a design choice, not a rule from a published standard. An earlier version returned to the menu after every action; it was removed because it felt odd in use. The menu is a tree of entries. An entry is either an action or a group of more entries, and a group shows a **Back** row where the root shows none, because the root is left with Esc. **Back** only leaves a group for the menu above it, so it is navigation, not a repeat. To add a feature, such as plugins or MCP servers, add an entry to `menuEntries` in `src/cli.ts`; `src/menu.ts` does not change. Every dependency is passed in, so tests use fakes.
+The menu is a launcher: the user picks one action, it runs once, and the tool exits, the same as the matching command. This is a design choice, not a rule from a published standard. An earlier version returned to the menu after every action; it was removed because it felt odd in use. The menu is a tree of entries. An entry is either an action or a group of more entries, and leaving any level with Esc ends the tool, so there is no **Back** row. To add a feature, such as plugins or MCP servers, add an entry to `menuEntries` in `src/cli.ts`; `src/menu.ts` does not change. Every dependency is passed in, so tests use fakes.
 
 - The menu needs a terminal. Without one it exits with an error that points to the commands, and it never draws the menu into a pipe.
-- Esc leaves wherever a menu or list is shown: in a group such as **Skills**, where it returns to the top menu; on the **List skills** list, where it ends the action and so the tool; and on the skill list in uninstall, where it cancels with "Cancelled. Nothing was removed." The footer names what Esc does: `esc back` in a group, `esc cancel` in the uninstall list, and `esc exit` on the **List skills** and **Agents** lists. At the top menu Esc leaves the tool, and its footer reads `esc exit`. A stray Esc there closes the tool, which was an accepted trade-off. Nothing is lost, because the menu has done nothing yet. `MenuRequest.isTopLevel` tells the prompt which case it is in, for the **Back** row and the footer word. The other prompts (the agent checkboxes and the confirmations) do not use Esc yet.
+- Esc leaves wherever a menu or list is shown, and it always ends the tool: in the top menu and in a group such as **Skills**; on the **List skills** and **Agents** lists; and on the skill list in uninstall, where it also prints "Cancelled. Nothing was removed." The footer names what Esc does: `esc exit` everywhere except the uninstall list, where it reads `esc cancel`. A stray Esc closes the tool, which was an accepted trade-off. Nothing is lost, because nothing has run yet. The other prompts (the agent checkboxes and the confirmations) do not use Esc yet.
 - An error in an action ends the program with exit code 1, the same as for a command. A user error (a skill that already exists, for example) prints as a red message from `src/user-error.ts`, which `src/run-cli.ts` uses. Any other error is reported by `src/run-cli.ts` as well.
 - Ctrl+C quits the whole program with code 130, at the menu or in any prompt.
 
@@ -118,7 +117,7 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/program.ts` — Commander commands and flags
 - `src/run-cli.ts` — runs the program and turns errors into messages and exit codes
 - `src/user-error.ts` — which errors are user errors, and how they are printed. Used by `run-cli.ts`.
-- `src/menu.ts` — the menu tree: ask, open a group (Back returns to the menu above) or run one action, then stop
+- `src/menu.ts` — the menu tree: ask, open a group or run one action, then stop. Leaving any level ends the menu.
 - `src/install-command.ts` — the install flow: choose, confirm, install, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/selection.ts` — turns `--agent` and `--all` into install targets
 - `src/agent-choices.ts` — the checkbox rows, with **All** first, and the selection they produce

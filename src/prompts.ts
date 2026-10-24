@@ -19,8 +19,6 @@ async function validateSkillDir(value: string): Promise<true | string> {
   );
 }
 
-const LEAVE_ROW = -1;
-
 type SelectConfig<Value> = Parameters<typeof select<Value>>[0];
 
 function keysHelpTipWithEscape(escapeLabel: string) {
@@ -39,7 +37,7 @@ function keysHelpTipWithEscape(escapeLabel: string) {
  */
 function selectWithEscape<Value>(
   config: SelectConfig<Value>,
-  escapeLabel = "back",
+  escapeLabel: string,
 ): Promise<Value | undefined> {
   return runUntilEscape(
     (signal) =>
@@ -154,20 +152,14 @@ export const terminalBrowseAgentsPrompts: BrowseAgentsPrompts = {
   },
 };
 
-export async function chooseMenuEntry({
-  title,
-  entries,
-  isTopLevel,
-}: MenuRequest): Promise<MenuEntry | undefined> {
-  const choices = entries.map(({ name }, position) => ({ name, value: position }));
-
+export async function chooseMenuEntry({ title, entries }: MenuRequest): Promise<MenuEntry | undefined> {
   const index = await selectWithEscape<number>(
     {
       message: title,
-      choices: isTopLevel ? choices : [...choices, { name: "Back", value: LEAVE_ROW }],
+      choices: entries.map(({ name }, position) => ({ name, value: position })),
     },
-    isTopLevel ? "exit" : "back",
+    "exit",
   );
 
-  return index === undefined || index === LEAVE_ROW ? undefined : entries[index];
+  return index === undefined ? undefined : entries[index];
 }

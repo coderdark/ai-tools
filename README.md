@@ -31,7 +31,7 @@ The package defines a command named `ai-tools`. The examples below use `node dis
 
 ## Use it
 
-Run it with no command to get a menu. It has two entries: **Skills** (list, install and uninstall) and **Agents** (list). The menu runs one action and then the tool exits, the same as the matching command. In the Skills menu, choose **Back** (or press Esc) to return to the top menu. Press Esc at the top menu, or Ctrl+C, to leave without doing anything:
+Run it with no command to get a menu. It has two entries: **Agents** (list) and **Skills** (list, install and uninstall). The menu runs one action and then the tool exits, the same as the matching command. Press Esc in any menu, or Ctrl+C, to leave without doing anything. There is no way back to the top menu from the Skills menu: run the tool again to choose something else:
 
 ```sh
 node dist/cli.js
@@ -41,7 +41,7 @@ In the menu, **List skills** opens a list you move through with the arrow keys. 
 
 In the menu, **Agents** opens a list of only the agents that were found, each with how many skills it has, such as `Claude   8 skills`. The line under the highlighted agent shows its skills folder. Press Enter on an agent to see the skills installed in it, each with its date; the tool then exits. Press Esc to leave without choosing.
 
-Esc also goes back from the Skills menu, and it cancels the skill list in uninstall. At the top menu, whose footer reads `esc exit`, Esc leaves the tool.
+Esc in the Skills menu and in the top menu leaves the tool, and the footer reads `esc exit`. Esc cancels the skill list in uninstall, and its footer reads `esc cancel`.
 
 The tool does not record when it installs a skill, so the date and time are when the skill's folder was created in each agent's skills folder, in your local time as an ISO 8601 date and time with the offset from UTC, such as `2026-05-09T18:06-05:00` (24-hour clock, to the minute). For a skill added as a symlink it is the time of the link. If you copy or move a skill folder yourself, it is the time of the copy. On Linux some file systems do not keep creation times, so the value may be wrong there (not tested). The uninstall list and the Agents screen show the same dates and times.
 

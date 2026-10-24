@@ -71,6 +71,7 @@ async function agents(): Promise<void> {
 }
 
 const menuEntries: MenuEntry[] = [
+  { name: "Agents", run: browseAgents },
   {
     name: "Skills",
     entries: [
@@ -79,7 +80,6 @@ const menuEntries: MenuEntry[] = [
       { name: "Uninstall a skill", run: uninstall },
     ],
   },
-  { name: "Agents", run: browseAgents },
 ];
 
 function menu(): Promise<void> {
