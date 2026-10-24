@@ -15,6 +15,8 @@ export type MenuEntry = MenuAction | MenuGroup;
 export interface MenuRequest {
   title: string;
   entries: MenuEntry[];
+  /** True for the first menu, as opposed to a group opened from it. */
+  isTopLevel: boolean;
 }
 
 export interface MenuDeps {
@@ -29,15 +31,20 @@ function isGroup(entry: MenuEntry): entry is MenuGroup {
   return "entries" in entry;
 }
 
-async function runLevel(title: string, entries: MenuEntry[], deps: MenuDeps): Promise<void> {
-  const entry = await deps.choose({ title, entries });
+async function runLevel(
+  title: string,
+  entries: MenuEntry[],
+  isTopLevel: boolean,
+  deps: MenuDeps,
+): Promise<void> {
+  const entry = await deps.choose({ title, entries, isTopLevel });
 
   if (!entry) {
     return;
   }
 
   if (isGroup(entry)) {
-    await runLevel(entry.name, entry.entries, deps);
+    await runLevel(entry.name, entry.entries, false, deps);
 
     return;
   }
@@ -50,5 +57,5 @@ export async function runMenu(deps: MenuDeps): Promise<void> {
     throw new UsageError("the menu needs a terminal. Run a command instead, such as `skills`");
   }
 
-  await runLevel(deps.title, deps.entries, deps);
+  await runLevel(deps.title, deps.entries, true, deps);
 }

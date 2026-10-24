@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { UsageError } from "./install-command.ts";
-import { runMenu, type MenuDeps, type MenuEntry } from "./menu.ts";
+import { runMenu, type MenuDeps, type MenuEntry, type MenuRequest } from "./menu.ts";
 import { SelectionError } from "./selection.ts";
 
 const LEAVE = "leave";
@@ -164,4 +164,26 @@ test("runMenu refuses to start without a terminal", async () => {
     (error: unknown) => error instanceof UsageError && /menu needs a terminal/.test(error.message),
   );
   assert.deepEqual(log.events, []);
+});
+
+test("runMenu tells the chooser which menu is the top level", async () => {
+  const requests: MenuRequest[] = [];
+  const { deps } = makeDeps(
+    [],
+    (log) => [{ name: "Skills", entries: [action(log, "List")] }],
+    {
+      choose: async (request) => {
+        requests.push(request);
+
+        return requests.length === 1 ? request.entries[0] : undefined;
+      },
+    },
+  );
+
+  await runMenu(deps);
+
+  assert.deepEqual(
+    requests.map(({ title, isTopLevel }) => `${title}: ${isTopLevel}`),
+    ["What would you like to do?: true", "Skills: false"],
+  );
 });

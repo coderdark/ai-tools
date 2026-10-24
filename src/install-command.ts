@@ -16,8 +16,10 @@ export interface InstallCommandOptions {
 }
 
 export interface InstallPrompts {
-  skillDir(): Promise<string>;
-  agents(found: ScanResult[]): Promise<SelectionRequest>;
+  /** Resolves to the folder path, or `undefined` when the user cancels. */
+  skillDir(): Promise<string | undefined>;
+  /** Resolves to the chosen agents, or `undefined` when the user cancels. */
+  agents(found: ScanResult[]): Promise<SelectionRequest | undefined>;
   confirm(skill: Skill, agentNames: string[]): Promise<boolean>;
 }
 
@@ -74,14 +76,21 @@ export function formatOutcomes(outcomes: InstallOutcome[], colors: ChalkInstance
   );
 }
 
-async function chooseSkill(options: InstallCommandOptions, deps: InstallCommandDeps): Promise<Skill> {
+const CANCELLED_MESSAGE = "Cancelled. Nothing was installed.";
+
+async function chooseSkill(
+  options: InstallCommandOptions,
+  deps: InstallCommandDeps,
+): Promise<Skill | undefined> {
   if (options.skillDir) {
     return readSkill(options.skillDir);
   }
 
   assertCanPrompt(deps, "pass the skill folder as an argument");
 
-  return readSkill(await deps.prompts.skillDir());
+  const skillDir = await deps.prompts.skillDir();
+
+  return skillDir === undefined ? undefined : readSkill(skillDir);
 }
 
 async function chooseTargets(
@@ -89,12 +98,19 @@ async function chooseTargets(
   deps: InstallCommandDeps,
   results: ScanResult[],
   found: ScanResult[],
-): Promise<InstallTarget[]> {
+): Promise<InstallTarget[] | undefined> {
   let targets = resolveTargets(results, options);
 
   if (!targets) {
     assertCanPrompt(deps, "choose agents with --agent or --all");
-    targets = resolveTargets(results, await deps.prompts.agents(found));
+
+    const request = await deps.prompts.agents(found);
+
+    if (!request) {
+      return undefined;
+    }
+
+    targets = resolveTargets(results, request);
   }
 
   if (!targets) {
@@ -155,10 +171,23 @@ export async function runInstall(
   }
 
   const skill = await chooseSkill(options, deps);
+
+  if (!skill) {
+    print(CANCELLED_MESSAGE);
+
+    return;
+  }
+
   const targets = await chooseTargets(options, deps, results, found);
 
+  if (!targets) {
+    print(CANCELLED_MESSAGE);
+
+    return;
+  }
+
   if (!(await isConfirmed(options, deps, skill, targets))) {
-    print("Cancelled. Nothing was installed.");
+    print(CANCELLED_MESSAGE);
 
     return;
   }

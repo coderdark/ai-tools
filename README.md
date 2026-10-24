@@ -41,7 +41,7 @@ In the menu, **List skills** opens a list you move through with the arrow keys. 
 
 In the menu, **Agents** opens a list of only the agents that were found, each with how many skills it has, such as `Claude   8 skills`. The line under the highlighted agent shows its skills folder. Press Enter on an agent to see the skills installed in it, each with its date; the tool then exits. Press Esc to leave without choosing.
 
-Esc in the Skills menu and in the top menu leaves the tool, and the footer reads `esc exit`. Esc cancels the skill list in uninstall, and its footer reads `esc cancel`.
+Esc at the top menu leaves the tool, and its footer reads `esc exit`. Esc in the Skills menu and in the Agents, List skills and uninstall lists cancels, and their footers read `esc cancel`. Esc also cancels each question of **Install a skill**. In every case the tool then ends.
 
 The tool does not record when it installs a skill, so the date and time are when the skill's folder was created in each agent's skills folder, in your local time as an ISO 8601 date and time with the offset from UTC, such as `2026-05-09T18:06-05:00` (24-hour clock, to the minute). For a skill added as a symlink it is the time of the link. If you copy or move a skill folder yourself, it is the time of the copy. On Linux some file systems do not keep creation times, so the value may be wrong there (not tested). The uninstall list and the Agents screen show the same dates and times.
 
@@ -87,6 +87,8 @@ node dist/cli.js install ./my-skill --all --yes
 | `--force`        | Replace a copy of the skill that is already installed. |
 
 Use the ids from the table above with `--agent`. You can't use `--agent` and `--all` together.
+
+Press Esc at any question to cancel. The tool prints "Cancelled. Nothing was installed." and exits with 0. Each question ends with a footer that includes `esc cancel`, like the lists. The confirmation is a Yes/No list.
 
 If the command isn't running in a terminal (for example in a script), it never asks questions. It stops with an error that says what you need to pass: the skill folder, `--agent` or `--all`, or `--yes`.
 

@@ -259,3 +259,31 @@ for (const { missing, options, message } of missingValueCases) {
     assert.equal(await exists(destination(results, "claude")), false);
   });
 }
+
+test("runInstall cancels without asking more when the skill folder question is cancelled", async (t) => {
+  const { results } = await setup(t, ["claude"]);
+  const { deps, log } = makeDeps(results);
+
+  deps.prompts = { ...deps.prompts, skillDir: async () => undefined };
+
+  await runInstall({}, deps);
+
+  assert.deepEqual(log.output, ["Cancelled. Nothing was installed."]);
+  assert.deepEqual(log.prompts, []);
+  assert.deepEqual(log.progress, []);
+  assert.equal(await exists(destination(results, "claude")), false);
+});
+
+test("runInstall cancels without asking more when the agents question is cancelled", async (t) => {
+  const { skillDir, results } = await setup(t, ["claude"]);
+  const { deps, log } = makeDeps(results);
+
+  deps.prompts = { ...deps.prompts, skillDir: async () => skillDir, agents: async () => undefined };
+
+  await runInstall({}, deps);
+
+  assert.deepEqual(log.output, ["Cancelled. Nothing was installed."]);
+  assert.deepEqual(log.prompts, []);
+  assert.deepEqual(log.progress, []);
+  assert.equal(await exists(destination(results, "claude")), false);
+});
