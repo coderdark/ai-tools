@@ -5,6 +5,7 @@ import { AGENTS, type Agent, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
 import { UsageError } from "./install-command.ts";
 import {
+  formatMcpNotes,
   formatMcpOutcomes,
   runMcpInstall,
   type McpInstallDeps,
@@ -350,7 +351,7 @@ test("runMcpInstall shows the progress of each agent and then the result of each
     "update: Installing fs into Claude...",
     "succeed: Installed fs into 2 agents",
   ]);
-  assert.deepEqual(log.output, ["✔ Cursor  added and confirmed", "✔ Claude  added and confirmed"]);
+  assert.deepEqual(log.output, ["✔ Cursor  installed", "✔ Claude  installed"]);
 });
 
 test("runMcpInstall says \"1 agent\" for a single agent", async () => {
@@ -371,7 +372,7 @@ test("runMcpInstall reports an agent that could not be confirmed without treatin
   await runMcpInstall({ name: "fs", command: ["node"], all: true, yes: true }, deps);
 
   assert.equal(log.progress.at(-1), "succeed: Installed fs into 1 agent");
-  assert.deepEqual(log.output, ["! Cursor  added, but could not confirm: could not check: agent was not found on PATH"]);
+  assert.deepEqual(log.output, ["! Cursor  installed, but could not confirm: could not check: agent was not found on PATH"]);
 });
 
 test("runMcpInstall prints every result and then fails when an agent failed or was skipped", async () => {
@@ -394,7 +395,7 @@ test("runMcpInstall prints every result and then fails when an agent failed or w
   );
   assert.equal(log.progress.at(-1), "fail: Could not install fs into 2 of 3 agents");
   assert.deepEqual(log.output, [
-    "✔ Cursor   added and confirmed",
+    "✔ Cursor   installed",
     "✖ Claude   failed: boom second line",
     "✖ ChatGPT  skipped: codex was not found on PATH",
   ]);
@@ -412,13 +413,110 @@ test("runMcpInstall marks the spinner as failed and passes the error on when the
   assert.deepEqual(log.output, []);
 });
 
+test("runMcpInstall says a server is already installed, and does not treat that as an error", async () => {
+  const { deps, log } = makeDeps(["cursor", "claude"], {}, {
+    install: async (_server, agents) => agents.map((agent) => ({ agent, status: "already-installed" })),
+  });
+
+  await runMcpInstall({ name: "fs", command: ["node"], all: true, yes: true }, deps);
+
+  assert.equal(log.progress.at(-1), "succeed: fs is already installed in 2 agents");
+  assert.deepEqual(log.output, [
+    "✔ Cursor  already installed",
+    "✔ Claude  already installed",
+  ]);
+});
+
+test("runMcpInstall counts the agents that were added and the ones that already had the server", async () => {
+  const { deps, log } = makeDeps(["cursor", "claude"], {}, {
+    install: async () => [
+      { agent: agentOf("cursor"), status: "confirmed" },
+      { agent: agentOf("claude"), status: "already-installed" },
+    ],
+  });
+
+  await runMcpInstall({ name: "fs", command: ["node"], all: true, yes: true }, deps);
+
+  assert.equal(log.progress.at(-1), "succeed: Installed fs into 1 agent; 1 already had it");
+});
+
+test("runMcpInstall still fails when an agent could not install it, even if another already had it", async () => {
+  const { deps, log } = makeDeps(["cursor", "claude"], {}, {
+    install: async () => [
+      { agent: agentOf("cursor"), status: "already-installed" },
+      { agent: agentOf("claude"), status: "failed", detail: "boom" },
+    ],
+  });
+
+  await assert.rejects(
+    runMcpInstall({ name: "fs", command: ["node"], all: true, yes: true }, deps),
+    (error) => error instanceof InstallError && error.message === "fs was not installed into Claude",
+  );
+  assert.equal(log.progress.at(-1), "fail: Could not install fs into 1 of 2 agents");
+});
+
+test("formatMcpOutcomes says where the server was saved, when the agent was added to", () => {
+  const lines = formatMcpOutcomes(
+    [
+      { agent: agentOf("claude"), status: "confirmed", savedIn: "/home/me/.claude.json" },
+      { agent: agentOf("cursor"), status: "unconfirmed", detail: "no listing", savedIn: "/home/me/.cursor/mcp.json" },
+    ],
+    plain,
+  );
+
+  assert.deepEqual(lines, [
+    "✔ Claude  installed in /home/me/.claude.json",
+    "! Cursor  installed in /home/me/.cursor/mcp.json, but could not confirm: no listing",
+  ]);
+});
+
+test("formatMcpOutcomes says where an existing server was found, or what the agent said about it", () => {
+  const lines = formatMcpOutcomes(
+    [
+      { agent: agentOf("cursor"), status: "already-installed", savedIn: "/home/me/.cursor/mcp.json" },
+      { agent: agentOf("claude"), status: "already-installed", note: "Local config (private to you in this project)" },
+    ],
+    plain,
+  );
+
+  assert.deepEqual(lines, [
+    "✔ Cursor  already installed in /home/me/.cursor/mcp.json",
+    "✔ Claude  already installed. Claude says: Local config (private to you in this project)",
+  ]);
+});
+
+test("formatMcpNotes prints each agent's note once, under its name", () => {
+  const note = "This is Claude Code's list.";
+
+  assert.deepEqual(
+    formatMcpNotes(
+      [
+        { agent: agentOf("claude"), status: "confirmed", scopeNote: note },
+        { agent: agentOf("cursor"), status: "confirmed" },
+      ],
+      plain,
+    ),
+    ["Note about Claude: This is Claude Code's list."],
+  );
+});
+
+test("runMcpInstall prints the notes after the agent lines", async () => {
+  const { deps, log } = makeDeps(["claude"], {}, {
+    install: async () => [{ agent: agentOf("claude"), status: "confirmed", scopeNote: "Claude Code only." }],
+  });
+
+  await runMcpInstall({ name: "fs", command: ["node"], all: true, yes: true }, deps);
+
+  assert.deepEqual(log.output, ["✔ Claude  installed", "Note about Claude: Claude Code only."]);
+});
+
 test("formatMcpOutcomes shows what the agent says about a server it has not loaded yet", () => {
   const [line] = formatMcpOutcomes(
     [{ agent: agentOf("cursor"), status: "confirmed", note: "fs: not loaded (needs approval)" }],
     plain,
   );
 
-  assert.equal(line, "✔ Cursor  added and confirmed. Listed as: fs: not loaded (needs approval)");
+  assert.equal(line, "✔ Cursor  installed. Listed as: fs: not loaded (needs approval)");
 });
 
 test("formatMcpOutcomes colors the marks and pads the agent names", () => {
@@ -431,6 +529,6 @@ test("formatMcpOutcomes colors the marks and pads the agent names", () => {
     colors,
   );
 
-  assert.equal(lines[0], `${colors.green("✔")} Cursor   added and confirmed`);
+  assert.equal(lines[0], `${colors.green("✔")} Cursor   installed`);
   assert.equal(lines[1], `${colors.red("✖")} ChatGPT  failed: x`);
 });

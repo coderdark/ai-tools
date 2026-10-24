@@ -4,10 +4,11 @@ import type { Agent } from "../agents/registry.ts";
 import { addToJsonConfig, checkJsonConfig } from "./json-config.ts";
 import type { CommandResult, CommandRunner } from "./run-command.ts";
 import type { McpServer } from "./server.ts";
-import { MCP_SETUPS, type McpCheck, type McpCliSetup, type McpJsonFileSetup } from "./setups.ts";
+import { MCP_SETUPS, type McpCheck, type McpCliSetup, type McpJsonFileSetup, type McpSetup } from "./setups.ts";
 
 export interface McpInstallDeps {
   home: string;
+  env: NodeJS.ProcessEnv;
   isOnPath(name: string): boolean;
   runCommand: CommandRunner;
   onProgress?(agent: Agent): void;
@@ -15,9 +16,17 @@ export interface McpInstallDeps {
 
 export type McpResult =
   | { status: "confirmed"; /** What the agent printed for the server, when it lists them. */ note?: string }
+  /** The agent already has a server with this name. Only the name is compared, and nothing is changed. */
+  | { status: "already-installed"; /** The agent's own words about where the server lives. */ note?: string }
   | { status: "unconfirmed" | "failed" | "skipped"; detail: string };
 
-export type McpOutcome = { agent: Agent } & McpResult;
+/** Set only when the server was added, or was already there and the agent says where. */
+interface Placed {
+  savedIn?: string;
+  scopeNote?: string;
+}
+
+export type McpOutcome = { agent: Agent } & McpResult & Placed;
 
 const MAX_DETAIL_LINES = 3;
 
@@ -73,33 +82,76 @@ function readCheck(result: CommandResult, check: McpCheck, name: string): { note
   return note === undefined ? undefined : { note };
 }
 
+function present<T extends object>(fields: T): T {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value)) as T;
+}
+
+function whereAdded(setup: McpSetup, { home, env }: McpInstallDeps): Placed {
+  return present({ savedIn: setup.savedIn?.(home, env), scopeNote: setup.scopeNote });
+}
+
+function alreadyInstalled(setup: McpSetup, checkOutput: string, deps: McpInstallDeps): McpResult & Placed {
+  const { home, env } = deps;
+  const located = setup.locateExisting?.(checkOutput, home, env) ?? { savedIn: setup.savedIn?.(home, env) };
+
+  return {
+    status: "already-installed",
+    ...present({ note: located.note, savedIn: located.savedIn, scopeNote: setup.scopeNote }),
+  };
+}
+
+function skipped(detail: string | undefined): McpResult | undefined {
+  return detail === undefined ? undefined : { status: "skipped", detail };
+}
+
 /** Some agents quietly replace a server that has the same name, so the tool asks first and never replaces. */
-async function findExisting(server: McpServer, setup: McpCliSetup, deps: McpInstallDeps): Promise<string | undefined> {
+async function findExisting(
+  server: McpServer,
+  setup: McpCliSetup,
+  deps: McpInstallDeps,
+): Promise<(McpResult & Placed) | undefined> {
   const { check } = setup;
 
   try {
     const result = await deps.runCommand(check.command, check.args(server.name));
 
-    return readCheck(result, check, server.name)
-      ? `${setup.command} already has a server named "${server.name}"`
-      : undefined;
+    return readCheck(result, check, server.name) ? alreadyInstalled(setup, result.stdout, deps) : undefined;
   } catch (error) {
-    return errorMessage(error, secretsOf(server));
+    return skipped(errorMessage(error, secretsOf(server)));
   }
 }
 
-async function findProblem(server: McpServer, agent: Agent, deps: McpInstallDeps): Promise<string | undefined> {
+async function checkCursorFile(
+  server: McpServer,
+  setup: McpJsonFileSetup,
+  deps: McpInstallDeps,
+): Promise<(McpResult & Placed) | undefined> {
+  const found = await checkJsonConfig(join(deps.home, ...setup.path), setup.key, server.name);
+
+  if (found.state === "exists") {
+    return alreadyInstalled(setup, "", deps);
+  }
+
+  return found.state === "unreadable" ? skipped(found.message) : undefined;
+}
+
+/** A result that settles the agent before anything is added: already installed, or it cannot be done. */
+async function checkBeforeAdding(
+  server: McpServer,
+  agent: Agent,
+  deps: McpInstallDeps,
+): Promise<(McpResult & Placed) | undefined> {
   const setup = MCP_SETUPS[agent.id];
 
   if (setup.kind === "json-file") {
-    return checkJsonConfig(join(deps.home, ...setup.path), setup.key, server.name);
+    return checkCursorFile(server, setup, deps);
   }
 
   if (!deps.isOnPath(setup.command)) {
-    return `${setup.command} was not found on PATH`;
+    return skipped(`${setup.command} was not found on PATH`);
   }
 
-  return setup.unsupported?.(server) ?? findExisting(server, setup, deps);
+  return skipped(setup.unsupported?.(server)) ?? findExisting(server, setup, deps);
 }
 
 function addToCursorFile(server: McpServer, setup: McpJsonFileSetup, deps: McpInstallDeps): Promise<void> {
@@ -155,7 +207,9 @@ async function installOne(server: McpServer, agent: Agent, deps: McpInstallDeps)
       return { agent, status: "failed", detail: failure };
     }
 
-    return { agent, ...(await confirmServer(server, MCP_SETUPS[agent.id].check, deps)) };
+    const setup = MCP_SETUPS[agent.id];
+
+    return { agent, ...(await confirmServer(server, setup.check, deps)), ...whereAdded(setup, deps) };
   } catch (error) {
     return { agent, status: "failed", detail: errorMessage(error, secrets) };
   }
@@ -170,14 +224,14 @@ export async function installMcpServer(
   agents: Agent[],
   deps: McpInstallDeps,
 ): Promise<McpOutcome[]> {
-  const problems = await Promise.all(agents.map((agent) => findProblem(server, agent, deps)));
+  const early = await Promise.all(agents.map((agent) => checkBeforeAdding(server, agent, deps)));
   const outcomes: McpOutcome[] = [];
 
   for (const [index, agent] of agents.entries()) {
-    const problem = problems[index];
+    const settled = early[index];
 
-    if (problem !== undefined) {
-      outcomes.push({ agent, status: "skipped", detail: problem });
+    if (settled !== undefined) {
+      outcomes.push({ agent, ...settled });
 
       continue;
     }

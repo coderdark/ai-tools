@@ -133,27 +133,37 @@ test("addToJsonConfig never replaces a server that already has the name", async 
   assert.equal(await readFile(path, "utf8"), original);
 });
 
-test("checkJsonConfig returns nothing when the file is missing or the name is free", async (t) => {
+test("checkJsonConfig says the name is free when the file is missing or does not have it", async (t) => {
   const root = await makeTempRoot(t, "ai-toolbox-json-");
   const path = join(root, "mcp.json");
 
-  assert.equal(await checkJsonConfig(path, "mcpServers", "fs"), undefined);
+  assert.deepEqual(await checkJsonConfig(path, "mcpServers", "fs"), { state: "free" });
 
   await writeFile(path, JSON.stringify({ mcpServers: { other: {} } }));
 
-  assert.equal(await checkJsonConfig(path, "mcpServers", "fs"), undefined);
+  assert.deepEqual(await checkJsonConfig(path, "mcpServers", "fs"), { state: "free" });
 });
 
-test("checkJsonConfig returns the reason when a write would be refused, and changes nothing", async (t) => {
+test("checkJsonConfig says when the name already exists, and changes nothing", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+  const text = JSON.stringify({ mcpServers: { fs: {} } });
+
+  await writeFile(path, text);
+
+  assert.deepEqual(await checkJsonConfig(path, "mcpServers", "fs"), { state: "exists" });
+  assert.equal(await readFile(path, "utf8"), text);
+});
+
+test("checkJsonConfig says why a file cannot be used, and changes nothing", async (t) => {
   const root = await makeTempRoot(t, "ai-toolbox-json-");
   const path = join(root, "mcp.json");
 
   await writeFile(path, "not json");
 
-  assert.match(String(await checkJsonConfig(path, "mcpServers", "fs")), /not valid JSON/);
+  const result = await checkJsonConfig(path, "mcpServers", "fs");
 
-  await writeFile(path, JSON.stringify({ mcpServers: { fs: {} } }));
-
-  assert.match(String(await checkJsonConfig(path, "mcpServers", "fs")), /already has a server named "fs"/);
-  assert.equal(await readFile(path, "utf8"), JSON.stringify({ mcpServers: { fs: {} } }));
+  assert.equal(result.state, "unreadable");
+  assert.match(String("message" in result ? result.message : ""), /not valid JSON/);
+  assert.equal(await readFile(path, "utf8"), "not json");
 });

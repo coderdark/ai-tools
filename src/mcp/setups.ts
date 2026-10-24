@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { AGENTS, type AgentId } from "../agents/registry.ts";
 import type { McpServer } from "./server.ts";
 
@@ -15,6 +17,18 @@ interface McpSetupFacts {
   /** What was done to confirm it, so a reader can tell facts from documentation alone. */
   verified: string;
   check: McpCheck;
+  /** The file the agent saves the server in. Left out until a real run has confirmed it. */
+  savedIn?(home: string, env: NodeJS.ProcessEnv): string;
+  /** Something the user should know about where the server will and will not show up. */
+  scopeNote?: string;
+  /** Where a server that is already there lives, read from what the check command printed. */
+  locateExisting?(checkOutput: string, home: string, env: NodeJS.ProcessEnv): ExistingPlace;
+}
+
+/** `note` is the agent's own description of the place, for when there is no file to point to. */
+export interface ExistingPlace {
+  savedIn?: string;
+  note?: string;
 }
 
 /** The agent writes its own config file when given its own `mcp add` command. */
@@ -89,11 +103,26 @@ function argsForGemini(args: string[]): string[] {
   return [...args.slice(0, firstOption), "--", ...args.slice(firstOption)];
 }
 
+function claudeFile(home: string, env: NodeJS.ProcessEnv): string {
+  return join(env.CLAUDE_CONFIG_DIR || home, ".claude.json");
+}
+
 const claude: McpCliSetup = {
   kind: "cli",
   command: binaryOf("claude"),
   source: "https://code.claude.com/docs/en/mcp",
   verified: "docs, `claude mcp add --help` and a real run",
+  savedIn: claudeFile,
+  locateExisting(output, home, env) {
+    const scope = /^\s*Scope:\s*(.+)$/m.exec(stripVTControlCharacters(output))?.[1]?.trim();
+
+    if (!scope) {
+      return {};
+    }
+
+    return scope.startsWith("User config") ? { savedIn: claudeFile(home, env) } : { note: scope };
+  },
+  scopeNote: "Claude here means Claude Code. Its servers do not show on the Connectors screen of the Claude chat app.",
   check: { command: binaryOf("claude"), args: (name) => ["mcp", "get", name], listsAllServers: false },
   add({ name, transport }) {
     if (transport.kind === "http") {
@@ -115,6 +144,7 @@ const chatgpt: McpCliSetup = {
   command: binaryOf("chatgpt"),
   source: "https://developers.openai.com/codex/mcp",
   verified: "docs, `codex mcp add --help` and a real run",
+  savedIn: (home, env) => join(env.CODEX_HOME || join(home, ".codex"), "config.toml"),
   check: {
     command: binaryOf("chatgpt"),
     args: (name) => ["mcp", "get", name, "--json"],
@@ -178,9 +208,12 @@ const grok: McpCliSetup = {
   },
 };
 
+const CURSOR_FILE = [".cursor", "mcp.json"];
+
 const cursor: McpJsonFileSetup = {
   kind: "json-file",
-  path: [".cursor", "mcp.json"],
+  path: CURSOR_FILE,
+  savedIn: (home) => join(home, ...CURSOR_FILE),
   key: "mcpServers",
   source: "https://cursor.com/docs/context/mcp",
   verified: "docs, a real ~/.cursor/mcp.json and a real run: `agent mcp list` listed the entry",

@@ -3,6 +3,9 @@ import { dirname } from "node:path";
 
 export class McpConfigError extends Error {}
 
+/** The settings file is fine, but it already has a server with that name. */
+export class McpServerExistsError extends McpConfigError {}
+
 type JsonObject = Record<string, unknown>;
 
 const PRIVATE_FILE_MODE = 0o600;
@@ -62,21 +65,30 @@ async function readFreeServers(path: string, key: string, name: string): Promise
   const servers = readServers(config, key, path);
 
   if (Object.hasOwn(servers, name)) {
-    throw new McpConfigError(`${path} already has a server named "${name}".`);
+    throw new McpServerExistsError(`${path} already has a server named "${name}".`);
   }
 
   return { config, servers };
 }
 
-/** The reason a write would be refused, or undefined when it would go ahead. Changes nothing. */
-export async function checkJsonConfig(path: string, key: string, name: string): Promise<string | undefined> {
+export type JsonConfigState =
+  | { state: "free" }
+  | { state: "exists" }
+  | { state: "unreadable"; message: string };
+
+/** What a write would meet: a free name, a name that exists, or a file that cannot be used. Changes nothing. */
+export async function checkJsonConfig(path: string, key: string, name: string): Promise<JsonConfigState> {
   try {
     await readFreeServers(path, key, name);
 
-    return undefined;
+    return { state: "free" };
   } catch (error) {
+    if (error instanceof McpServerExistsError) {
+      return { state: "exists" };
+    }
+
     if (error instanceof McpConfigError) {
-      return error.message;
+      return { state: "unreadable", message: error.message };
     }
 
     throw error;

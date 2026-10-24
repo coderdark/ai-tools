@@ -265,15 +265,35 @@ function oneLine(text: string): string {
   return text.replaceAll("\n", " ");
 }
 
+function placed(text: string, { savedIn }: McpOutcome): string {
+  return savedIn ? `${text} in ${savedIn}` : text;
+}
+
+function describeExisting(outcome: McpOutcome): string {
+  if (outcome.status === "already-installed" && outcome.note) {
+    return `already installed. ${outcome.agent.name} says: ${oneLine(outcome.note)}`;
+  }
+
+  return placed("already installed", outcome);
+}
+
 function formatOutcome(outcome: McpOutcome, colors: ChalkInstance): { mark: string; text: string } {
   switch (outcome.status) {
-    case "confirmed":
+    case "confirmed": {
+      const text = placed("installed", outcome);
+
       return {
         mark: colors.green("✔"),
-        text: outcome.note ? `added and confirmed. Listed as: ${oneLine(outcome.note)}` : "added and confirmed",
+        text: outcome.note ? `${text}. Listed as: ${oneLine(outcome.note)}` : text,
       };
+    }
+    case "already-installed":
+      return { mark: colors.green("✔"), text: describeExisting(outcome) };
     case "unconfirmed":
-      return { mark: colors.yellow("!"), text: `added, but could not confirm: ${oneLine(outcome.detail)}` };
+      return {
+        mark: colors.yellow("!"),
+        text: `${placed("installed", outcome)}, but could not confirm: ${oneLine(outcome.detail)}`,
+      };
     case "failed":
       return { mark: colors.red("✖"), text: `failed: ${oneLine(outcome.detail)}` };
     case "skipped":
@@ -289,6 +309,12 @@ export function formatMcpOutcomes(outcomes: McpOutcome[], colors: ChalkInstance)
 
     return `${mark} ${outcome.agent.name.padEnd(nameWidth)}  ${text}`;
   });
+}
+
+export function formatMcpNotes(outcomes: McpOutcome[], colors: ChalkInstance): string[] {
+  return outcomes.flatMap(({ agent, scopeNote }) =>
+    scopeNote ? [colors.dim(`Note about ${agent.name}: ${scopeNote}`)] : [],
+  );
 }
 
 async function installWithProgress(
@@ -307,6 +333,19 @@ async function installWithProgress(
 
     throw error;
   }
+}
+
+function summarizeSuccess(server: McpServer, outcomes: McpOutcome[]): string {
+  const already = outcomes.filter(({ status }) => status === "already-installed").length;
+  const added = outcomes.length - already;
+
+  if (added === 0) {
+    return `${server.name} is already installed in ${countAgents(already)}`;
+  }
+
+  const installed = `Installed ${server.name} into ${countAgents(added)}`;
+
+  return already === 0 ? installed : `${installed}; ${already} already had it`;
 }
 
 function isProblem({ status }: McpOutcome): boolean {
@@ -335,14 +374,14 @@ export async function runMcpInstall(options: McpInstallOptions, deps: McpInstall
   const problems = outcomes.filter(isProblem);
 
   if (problems.length === 0) {
-    progress.succeed(`Installed ${server.name} into ${countAgents(outcomes.length)}`);
+    progress.succeed(summarizeSuccess(server, outcomes));
   } else {
     progress.fail(
       `Could not install ${server.name} into ${problems.length} of ${countAgents(outcomes.length)}`,
     );
   }
 
-  for (const line of formatMcpOutcomes(outcomes, colors)) {
+  for (const line of [...formatMcpOutcomes(outcomes, colors), ...formatMcpNotes(outcomes, colors)]) {
     print(line);
   }
 

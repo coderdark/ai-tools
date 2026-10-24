@@ -54,13 +54,19 @@ function behaveLikeAgent(args: string[], world: World): CommandResult {
   return { exitCode: 0, stdout: world.added ? "fs  ready\n" : "", stderr: "" };
 }
 
-async function setup(t: TestContext, onPath: string[], script: Script = () => undefined) {
+async function setup(
+  t: TestContext,
+  onPath: string[],
+  script: Script = () => undefined,
+  env: NodeJS.ProcessEnv = {},
+) {
   const home = await makeTempRoot(t, "ai-toolbox-mcp-");
   const calls: string[] = [];
   const progress: string[] = [];
   const world: World = { added: false };
   const deps = {
     home,
+    env,
     isOnPath: (name: string) => onPath.includes(name),
     runCommand: async (command: string, args: string[]): Promise<CommandResult> => {
       calls.push([command, ...args].join(" "));
@@ -101,19 +107,19 @@ test("installMcpServer asks the agent whether it knows the name, adds the server
   assert.deepEqual(summary(outcomes), ["claude:confirmed"]);
 });
 
-test("installMcpServer skips an agent that already has a server with the name, and never runs add for it", async (t) => {
-  const { deps, calls } = await setup(t, ["codex"], (_command, args) => (args[1] === "get" ? OK : undefined));
+test("installMcpServer reports an agent that already has a server with the name as already installed, and never runs add for it", async (t) => {
+  const { home, deps, calls } = await setup(t, ["codex"], (_command, args) => (args[1] === "get" ? OK : undefined));
   const [outcome] = await installMcpServer(LOCAL, [agent("chatgpt")], deps);
 
   assert.deepEqual(outcome, {
     agent: agent("chatgpt"),
-    status: "skipped",
-    detail: 'codex already has a server named "fs"',
+    status: "already-installed",
+    savedIn: join(home, ".codex", "config.toml"),
   });
   assert.deepEqual(calls, ["codex mcp get fs --json"]);
 });
 
-test("installMcpServer skips an agent whose listing already names the server, but not one that names only a longer name", async (t) => {
+test("installMcpServer reports an agent whose listing already names the server as already installed, but not one that names only a longer name", async (t) => {
   const listing = (output: string): Script => (_command, args) =>
     args[1] === "list" ? { exitCode: 0, stdout: output, stderr: "" } : undefined;
   const taken = await setup(t, ["gemini"], listing("fs  connected\n"));
@@ -121,7 +127,7 @@ test("installMcpServer skips an agent whose listing already names the server, bu
     args[1] === "list" ? { exitCode: 0, stdout: world.added ? "fs  ready\nmyfs  ready\n" : "myfs  ready\n", stderr: "" } : undefined,
   );
 
-  assert.deepEqual(summary(await installMcpServer(LOCAL, [agent("gemini")], taken.deps)), ["gemini:skipped"]);
+  assert.deepEqual(summary(await installMcpServer(LOCAL, [agent("gemini")], taken.deps)), ["gemini:already-installed"]);
   assert.deepEqual(summary(await installMcpServer(LOCAL, [agent("gemini")], similar.deps)), ["gemini:confirmed"]);
 });
 
@@ -213,12 +219,17 @@ test("installMcpServer adds a server to Cursor's mcp.json and then asks Cursor's
 
 test("installMcpServer shows the line Cursor prints for the server, without terminal control codes", async (t) => {
   const listing = "\u001b[2K\u001b[GLoading MCPs…\n\u001b[2K\u001b[1A\u001b[2K\u001b[Gfs: not loaded (needs approval)\n";
-  const { deps } = await setup(t, ["agent"], (_command, args) =>
+  const { home, deps } = await setup(t, ["agent"], (_command, args) =>
     args[1] === "list" ? { exitCode: 0, stdout: listing, stderr: "" } : undefined,
   );
   const [outcome] = await installMcpServer(LOCAL, [agent("cursor")], deps);
 
-  assert.deepEqual(outcome, { agent: agent("cursor"), status: "confirmed", note: "fs: not loaded (needs approval)" });
+  assert.deepEqual(outcome, {
+    agent: agent("cursor"),
+    status: "confirmed",
+    note: "fs: not loaded (needs approval)",
+    savedIn: join(home, ".cursor", "mcp.json"),
+  });
 });
 
 test("installMcpServer still adds to Cursor when Cursor's agent command is missing, and says it could not check", async (t) => {
@@ -230,7 +241,7 @@ test("installMcpServer still adds to Cursor when Cursor's agent command is missi
   assert.equal(JSON.parse(await readFile(join(home, ".cursor", "mcp.json"), "utf8")).mcpServers.fs.command, "npx");
 });
 
-test("installMcpServer skips Cursor, and leaves its file alone, when the name is taken or the file is not JSON", async (t) => {
+test("installMcpServer leaves Cursor's file alone: a taken name is already installed, and a file that is not JSON is skipped", async (t) => {
   const taken = await setup(t, ["agent"]);
   const broken = await setup(t, ["agent"]);
   const takenPath = join(taken.home, ".cursor", "mcp.json");
@@ -245,8 +256,7 @@ test("installMcpServer skips Cursor, and leaves its file alone, when the name is
   const [takenOutcome] = await installMcpServer(LOCAL, [agent("cursor")], taken.deps);
   const [brokenOutcome] = await installMcpServer(LOCAL, [agent("cursor")], broken.deps);
 
-  assert.equal(takenOutcome?.status, "skipped");
-  assert.match(detailOf(takenOutcome), /already has a server named "fs"/);
+  assert.deepEqual(takenOutcome, { agent: agent("cursor"), status: "already-installed", savedIn: takenPath });
   assert.equal(brokenOutcome?.status, "skipped");
   assert.match(detailOf(brokenOutcome), /not valid JSON/);
   assert.equal(await readFile(takenPath, "utf8"), takenText);
@@ -294,4 +304,75 @@ test("installMcpServer shows only the first lines of a long message", async (t) 
   const [outcome] = await installMcpServer(LOCAL, [agent("claude")], deps);
 
   assert.equal(detailOf(outcome), "line 1\nline 2\nline 3");
+});
+
+test("installMcpServer says where each agent saved the server, for the agents whose file was confirmed by a real run", async (t) => {
+  const { home, deps } = await setup(t, ["claude", "codex"]);
+  const outcomes = await installMcpServer(LOCAL, [agent("cursor"), agent("claude"), agent("chatgpt")], deps);
+
+  assert.deepEqual(
+    outcomes.map(({ savedIn }) => savedIn),
+    [join(home, ".cursor", "mcp.json"), join(home, ".claude.json"), join(home, ".codex", "config.toml")],
+  );
+});
+
+test("installMcpServer follows CLAUDE_CONFIG_DIR and CODEX_HOME when it says where the server was saved", async (t) => {
+  const env = { CLAUDE_CONFIG_DIR: "/elsewhere/claude", CODEX_HOME: "/elsewhere/codex" };
+  const { deps } = await setup(t, ["claude", "codex"], () => undefined, env);
+  const outcomes = await installMcpServer(LOCAL, [agent("claude"), agent("chatgpt")], deps);
+
+  assert.deepEqual(
+    outcomes.map(({ savedIn }) => savedIn),
+    [join("/elsewhere/claude", ".claude.json"), join("/elsewhere/codex", "config.toml")],
+  );
+});
+
+test("installMcpServer gives no path for an agent whose file has not been confirmed, nor for an agent that failed", async (t) => {
+  const { deps } = await setup(t, ["gemini", "claude"], (command, args) =>
+    command === "claude" ? (args[1] === "add" ? { exitCode: 1, stdout: "", stderr: "no\n" } : NOT_FOUND) : undefined,
+  );
+  const outcomes = await installMcpServer(LOCAL, [agent("gemini"), agent("claude")], deps);
+
+  assert.deepEqual(summary(outcomes), ["gemini:confirmed", "claude:failed"]);
+  assert.deepEqual(outcomes.map(({ savedIn }) => savedIn), [undefined, undefined]);
+});
+
+test("installMcpServer tells the user that Claude's list is Claude Code's, and not the chat app's connectors", async (t) => {
+  const { deps } = await setup(t, ["claude"]);
+  const [outcome] = await installMcpServer(LOCAL, [agent("claude")], deps);
+
+  assert.match(outcome?.scopeNote ?? "", /Claude Code/);
+  assert.match(outcome?.scopeNote ?? "", /Connectors/);
+});
+
+function claudeGet(output: string): Script {
+  return (_command, args) => (args[1] === "get" ? { exitCode: 0, stdout: output, stderr: "" } : undefined);
+}
+
+test("installMcpServer says where Claude's existing server lives when Claude says it is in the user config", async (t) => {
+  const output = "fs:\n  Scope: User config (available in all your projects)\n  Status: Connected\n";
+  const { home, deps } = await setup(t, ["claude"], claudeGet(output));
+  const [outcome] = await installMcpServer(LOCAL, [agent("claude")], deps);
+
+  assert.equal(outcome?.status, "already-installed");
+  assert.equal(outcome?.savedIn, join(home, ".claude.json"));
+  assert.match(outcome?.scopeNote ?? "", /Connectors/);
+});
+
+test("installMcpServer passes on Claude's own words, and no path, when the existing server is not in the user config", async (t) => {
+  const output = "fs:\n  Scope: Local config (private to you in this project)\n";
+  const { deps } = await setup(t, ["claude"], claudeGet(output));
+  const [outcome] = await installMcpServer(LOCAL, [agent("claude")], deps);
+
+  assert.equal(outcome?.status, "already-installed");
+  assert.equal(outcome?.savedIn, undefined);
+  assert.equal(outcome && "note" in outcome ? outcome.note : undefined, "Local config (private to you in this project)");
+});
+
+test("installMcpServer gives no path for an existing Claude server when Claude does not say where it is", async (t) => {
+  const { deps } = await setup(t, ["claude"], claudeGet("fs:\n  Status: Connected\n"));
+  const [outcome] = await installMcpServer(LOCAL, [agent("claude")], deps);
+
+  assert.equal(outcome?.status, "already-installed");
+  assert.equal(outcome?.savedIn, undefined);
 });

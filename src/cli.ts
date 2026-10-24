@@ -58,6 +58,7 @@ function mcpInstall(options: McpInstallOptions): Promise<void> {
     install: (server, agents, onProgress) =>
       installMcpServer(server, agents, {
         home,
+        env: process.env,
         isOnPath: (name) => isOnPath(name, pathDirs),
         runCommand,
         onProgress,
