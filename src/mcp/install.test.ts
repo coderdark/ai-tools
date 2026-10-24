@@ -85,6 +85,9 @@ async function setup(
   return { home, calls, progress, deps };
 }
 
+const CHATGPT_NOTE =
+  "ChatGPT here means Codex. Its servers work in Work mode in the ChatGPT app, not in Chat mode.";
+
 function summary(outcomes: McpOutcome[]): string[] {
   return outcomes.map((outcome) => `${outcome.agent.id}:${outcome.status}`);
 }
@@ -115,6 +118,7 @@ test("installMcpServer reports an agent that already has a server with the name 
     agent: agent("chatgpt"),
     status: "already-installed",
     savedIn: join(home, ".codex", "config.toml"),
+    scopeNote: CHATGPT_NOTE,
   });
   assert.deepEqual(calls, ["codex mcp get fs --json"]);
 });
@@ -375,4 +379,31 @@ test("installMcpServer gives no path for an existing Claude server when Claude d
 
   assert.equal(outcome?.status, "already-installed");
   assert.equal(outcome?.savedIn, undefined);
+});
+
+test("installMcpServer tells the user that ChatGPT's servers work in Work mode and not in Chat mode, whether added or already there", async (t) => {
+  const added = await setup(t, ["codex"]);
+  const existing = await setup(t, ["codex"], (_command, args) => (args[1] === "get" ? OK : undefined));
+  const [addedOutcome] = await installMcpServer(LOCAL, [agent("chatgpt")], added.deps);
+  const [existingOutcome] = await installMcpServer(LOCAL, [agent("chatgpt")], existing.deps);
+
+  assert.equal(addedOutcome?.status, "confirmed");
+  assert.equal(addedOutcome?.scopeNote, CHATGPT_NOTE);
+  assert.equal(existingOutcome?.status, "already-installed");
+  assert.equal(existingOutcome?.scopeNote, CHATGPT_NOTE);
+  assert.match(CHATGPT_NOTE, /Work mode/);
+  assert.match(CHATGPT_NOTE, /Chat mode/);
+});
+
+test("installMcpServer gives no note for an agent that failed, and none for Cursor", async (t) => {
+  const failing = await setup(t, ["codex"], (_command, args) =>
+    args[1] === "add" ? { exitCode: 1, stdout: "", stderr: "no\n" } : args[1] === "get" ? NOT_FOUND : undefined,
+  );
+  const cursor = await setup(t, ["agent"]);
+  const [failed] = await installMcpServer(LOCAL, [agent("chatgpt")], failing.deps);
+  const [cursorOutcome] = await installMcpServer(LOCAL, [agent("cursor")], cursor.deps);
+
+  assert.equal(failed?.status, "failed");
+  assert.equal(failed?.scopeNote, undefined);
+  assert.equal(cursorOutcome?.scopeNote, undefined);
 });

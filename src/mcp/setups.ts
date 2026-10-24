@@ -189,6 +189,7 @@ const chatgpt: McpCliSetup = {
   source: "https://developers.openai.com/codex/mcp",
   verified: "docs, `codex mcp add --help`, `codex mcp remove --help` and real runs",
   savedIn: (home, env) => join(env.CODEX_HOME || join(home, ".codex"), "config.toml"),
+  scopeNote: "ChatGPT here means Codex. Its servers work in Work mode in the ChatGPT app, not in Chat mode.",
   list: { kind: "command", command: binaryOf("chatgpt"), args: ["mcp", "list", "--json"], parse: parseCodexList },
   check: {
     command: binaryOf("chatgpt"),
