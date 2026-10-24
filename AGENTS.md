@@ -161,6 +161,26 @@ function getActiveUsers(users, minAge) {
 }
 ```
 
+# Testing
+
+Follow test-driven development (TDD) for every change that adds or
+alters behavior. Repeat the red, green, refactor cycle until all tests
+pass.
+
+1. **Red:** write one small failing test for the next piece of behavior.
+   Run it and confirm it fails for the reason you expect.
+2. **Green:** write the least code that makes that test pass. Run the
+   tests and confirm they pass.
+3. **Refactor:** clean up the code and the tests while keeping every
+   test green. Run the tests again after each change.
+
+- Work on one behavior at a time. Don't write production code without a
+  failing test that needs it.
+- Don't call a task done until the full test suite passes.
+- If a test fails, fix the code or the test, then run it again. Don't
+  skip, delete or weaken a test to get to green.
+- Say which tests you ran and show the result.
+
 # Answer format
 
 For each finding or answer, include:

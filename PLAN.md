@@ -1,0 +1,73 @@
+# Phase 1: install local skills per agent
+
+Phase 1 is an interactive Node CLI named `ai-toolbox`. It only installs skills. Plugins, MCP servers, delete, and project-scoped skills stay out of this phase. Each agent lives in one registry so later actions can reuse the same scan.
+
+A skill is a folder already on disk that contains `SKILL.md`. The CLI copies the whole folder, except `.git`, into each chosen agent’s user skills directory. It does not download from git and it does not move the source.
+
+## Scan
+
+Every command scans this machine before it prompts or installs. The scan checks known locations only: a config directory in the home folder, a CLI on `PATH`, and an app in `/Applications` or `~/Applications`. It does not walk the whole disk. An agent is available when any one of its signals is found.
+
+The same scan result feeds the agent list and the install checkbox. Agents the scan does not find are listed by `ai-toolbox agents` and omitted from the checkbox. Install never targets them.
+
+- **Cursor** — `~/.cursor`, `cursor`, or `Cursor.app`. Writes `~/.cursor/skills/<name>`. Never write `~/.cursor/skills-cursor`.
+- **Claude** — `~/.claude`, `claude`, or `Claude.app`. Writes `~/.claude/skills/<name>`.
+- **ChatGPT** — `~/.codex`, `codex`, or `ChatGPT.app`. Writes `~/.codex/skills/<name>`. The ChatGPT app has no separate local skills folder.
+- **Gemini** — `~/.gemini`, `gemini`, or `Gemini.app`. Writes `~/.gemini/skills/<name>`.
+- **Grok** — `~/.grok`, `grok`, or `Grok.app`. Writes `~/.grok/skills/<name>`.
+
+`~/.agents/skills` is not an install target. Codex, Cursor, and Gemini all read it, so a copy there would not stay with one agent. Cursor also reads `~/.claude/skills` and `~/.codex/skills`. After a Claude or ChatGPT install, the CLI says that Cursor will see that skill too. The copy is still written only to the directory the user chose.
+
+On the machine this was planned on, the scan finds Cursor, Claude, and ChatGPT. Gemini and Grok are not installed.
+
+## Flow
+
+```mermaid
+flowchart TD
+  start["ai-toolbox"] --> scan["Scan home, PATH, and Applications"]
+  scan --> menu["Install a skill or show agents"]
+  menu --> show["Print found and missing agents"]
+  menu --> path["Prompt for the skill folder"]
+  path --> pick["Checkbox of found agents, plus All"]
+  pick --> confirm["Confirm"]
+  confirm --> copy["Copy into each chosen skill directory"]
+```
+
+`ai-toolbox` with no command scans, then offers **Install a skill** or **Show agents**. Show agents prints the scan and stops. `ai-toolbox agents` prints that same list with no menu. `ai-toolbox install` skips the menu and starts at the skill folder.
+
+Install prompts, in order:
+
+1. **Skill folder.** Ask for a path. If it is not a directory or has no `SKILL.md`, say why and ask again.
+2. **Agents.** One checkbox. The first row is **All**. The other rows are only agents the scan found. Space toggles a row. **All** installs into every found agent and ignores the other rows. Any other selection installs only into those agents. If nothing is selected, ask again. If the scan found nobody, stop with an error.
+3. **Confirm.** Show the skill name and the agent names. Declining cancels before any copy.
+
+These flags skip the prompts they already answer, so a full command can run without a terminal. `--agent` is repeatable. `--agent` and `--all` cannot be used together. `--yes` skips confirm. `--force` replaces an existing destination. If a required value is missing and stdout is not a terminal, exit with an error instead of prompting.
+
+- `ai-toolbox install <skill-dir> --agent cursor --agent claude`
+- `ai-toolbox install <skill-dir> --all`
+
+## Install rules
+
+- Read `name` from `SKILL.md` frontmatter. If it is missing, use the folder name. Require a non-empty `description`. The name must be 1–64 characters of lowercase letters, numbers, and hyphens, so one folder is valid for every agent. The destination folder uses that name.
+- Create the agent skills directory when it is missing.
+- If a chosen destination already exists, copy nothing unless `--force` is set. `--force` replaces that destination only.
+- A named agent that is unknown or absent from the scan fails the command before any copy. `--all` means every agent the scan found.
+- Check every destination, then copy, so a failure does not leave a partial install.
+
+## Presentation
+
+[Commander](https://github.com/tj/commander.js) defines the commands and flags. [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) runs the menu, path prompt, checkbox, and confirm. [chalk](https://github.com/chalk/chalk) colors output. [ora](https://github.com/sindresorhus/ora) is the install spinner.
+
+Found agents are green, missing agents are dim, and skill paths are cyan. After confirm, one spinner updates per agent, for example `Installing review-pr into Claude...`, then stops with a green line naming the agent and the path. Errors are red and the spinner fails. The spinner starts only after the destination checks pass. Color and the spinner turn off when stdout is not a terminal or `NO_COLOR` is set.
+
+## Tech stack and layout
+
+TypeScript on Node 24. Commander, `@inquirer/prompts`, chalk, and ora are all ES-module-only, so the package sets `"type": "module"` and compiles with `NodeNext` module settings. Tests use `node:test` and call the scan and install functions directly, with a temporary home directory. They do not open prompts. Dev dependencies are `typescript` and `@types/node` at major version 24 to match the runtime. Runtime dependencies are `commander`, `@inquirer/prompts`, `chalk`, and `ora`.
+
+- `package.json` — bin `ai-toolbox`, scripts `build` and `test`
+- `src/cli.ts` — commands, prompts, color, and the spinner
+- `src/agents/registry.ts` — the five agents, the scan, and skill paths
+- `src/skills/install.ts` — parse `SKILL.md`, validate, and copy
+- `test/install.test.ts` — scan results, a successful copy, **All** writing only found agents, a missing `SKILL.md`, an existing destination, an unknown agent, and no write to `~/.agents/skills`
+
+Usage is in `ai-toolbox --help`.
