@@ -1,6 +1,22 @@
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { createProgress, type Spinner } from "./progress.ts";
+import { Writable } from "node:stream";
+import { createProgress, createSpinner, type Spinner } from "./progress.ts";
+
+function makeTerminalStream(): { stream: NodeJS.WritableStream; output: () => string } {
+  const chunks: string[] = [];
+  const stream = Object.assign(
+    new Writable({
+      write(chunk, _encoding, done) {
+        chunks.push(String(chunk));
+        done();
+      },
+    }),
+    { isTTY: true, columns: 80, rows: 24, cursorTo: () => true, clearLine: () => true, moveCursor: () => true },
+  );
+
+  return { stream, output: () => chunks.join("") };
+}
 
 function makeFakeSpinner(): { spinner: Spinner; calls: string[] } {
   const calls: string[] = [];
@@ -34,4 +50,45 @@ test("createProgress maps start, update, succeed and fail onto the spinner", () 
     "succeed: Installed skill into 1 agent",
     "fail: Could not install skill",
   ]);
+});
+
+function useInteractiveTerminalEnv(t: TestContext): void {
+  const { TERM, CI } = process.env;
+
+  process.env.TERM = "xterm-256color";
+  delete process.env.CI;
+
+  t.after(() => {
+    process.env.TERM = TERM;
+
+    if (CI !== undefined) {
+      process.env.CI = CI;
+    }
+  });
+}
+
+test("createSpinner animates in a terminal when NO_COLOR is not set", (t) => {
+  useInteractiveTerminalEnv(t);
+
+  const { stream, output } = makeTerminalStream();
+  const spinner = createSpinner({}, stream);
+
+  spinner.start("working");
+  spinner.succeed("done");
+
+  assert.match(output(), /\x1b\[/);
+});
+
+test("createSpinner prints plain lines with no animation or color codes when NO_COLOR is set", (t) => {
+  useInteractiveTerminalEnv(t);
+
+  const { stream, output } = makeTerminalStream();
+  const spinner = createSpinner({ NO_COLOR: "1" }, stream);
+
+  spinner.start("working");
+  spinner.succeed("done");
+
+  assert.doesNotMatch(output(), /\x1b/);
+  assert.match(output(), /working/);
+  assert.match(output(), /done/);
 });

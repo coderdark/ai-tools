@@ -8,7 +8,14 @@ export interface Spinner {
   fail(text?: string): unknown;
 }
 
-export function createProgress(spinner: Spinner = ora()): InstallProgress {
+export function createSpinner(
+  env: NodeJS.ProcessEnv = process.env,
+  stream: NodeJS.WritableStream = process.stderr,
+): Spinner {
+  return ora({ stream, isEnabled: env.NO_COLOR ? false : undefined });
+}
+
+export function createProgress(spinner: Spinner = createSpinner()): InstallProgress {
   return {
     start: (text) => spinner.start(text),
     update: (text) => {
