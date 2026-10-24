@@ -76,6 +76,23 @@ These rules apply to every answer, finding, review, change and task.
 - Never pressure or rush. Mistakes are normal; treat them as something
   to fix, not something to blame.
 
+## Keep it plain
+- Use everyday words and short sentences. Say "check" before "validate",
+  "folder" before "directory", "undo" before "roll back", unless the
+  technical word is the one the user used.
+- Explain a technical term in a few words the first time it appears, then
+  use it consistently. Don't swap in a synonym for the same thing.
+- Say what something means for the user, not only what it is called. For
+  example, "this copies the folder into each agent" rather than "this
+  performs a recursive copy to the target directories".
+- Spell out abbreviations and internal names the first time (for
+  example, "MCP (Model Context Protocol)"), unless the user already
+  used them.
+- Put file names, commands and code in backticks, and keep them out of
+  the middle of a sentence's meaning, so the sentence still reads
+  clearly without them.
+- Prefer a short concrete example to an abstract description.
+
 # How to handle large or complex tasks
 
 ## Start small and clear
@@ -161,6 +178,24 @@ function getActiveUsers(users, minAge) {
 }
 ```
 
+## Comments
+
+Write self-commenting code. Use clear names for variables, functions,
+files and types, and small functions that each do one thing, so the code
+explains itself.
+
+- Use the minimum number of comments. Don't restate what the code does.
+- Add a comment only when the code is complex or the reason is not
+  obvious: a tricky algorithm, a workaround, a hidden constraint, or a
+  decision that would surprise the next reader. Explain why, not what.
+- Before adding a comment, try to remove the need for it by renaming or
+  simplifying the code.
+- Keep comments short and up to date. Delete a comment when the code
+  that needed it changes.
+- Don't leave commented-out code behind.
+- Apply this to code you write or change. Don't strip comments from
+  untouched code unless asked.
+
 # Best practices
 
 Always follow the best practices for this project's tech stack,
@@ -185,6 +220,42 @@ patterns, logic and decisions.
   sure what the best practice is, look it up or ask. Don't guess.
 - When the project's current approach is not best practice, say so and
   suggest a fix. Don't silently copy it or silently change it.
+
+# Design principles
+
+Write code that follows SOLID, DRY and KISS. When two principles pull
+in different directions, choose the simpler code and say why.
+
+## SOLID
+- **Single responsibility:** each module, class and function has one
+  reason to change. If you need "and" to describe what it does, split it.
+- **Open/closed:** add behavior by adding code (a new entry, a new
+  implementation), not by editing working code in many places. For
+  example, a new agent is a new registry entry, not a new `if` branch.
+- **Liskov substitution:** anything that implements an interface or
+  extends a type must work wherever the original is expected, without
+  surprising callers.
+- **Interface segregation:** keep interfaces small and focused. Don't
+  force a caller to depend on methods or fields it doesn't use.
+- **Dependency inversion:** depend on small interfaces, not concrete
+  details. Pass things like the file system, prompts, output and the
+  environment in as arguments, so logic is easy to test with fakes.
+
+## DRY
+- Each piece of knowledge lives in one place. Reuse the existing helper,
+  constant or type before writing a new one.
+- Remove duplication once the same logic appears a third time. Two
+  similar pieces are not yet a reason to abstract.
+- Don't merge code that only looks alike. If two pieces change for
+  different reasons, keep them apart.
+
+## KISS
+- Choose the simplest design that meets the requirement and passes the
+  tests. Don't build for needs that don't exist yet.
+- Prefer plain functions, data and early returns to layers, patterns
+  and indirection. Add an abstraction only when it removes real
+  complexity.
+- Keep functions short and flat, with few parameters and little nesting.
 
 # Testing
 
