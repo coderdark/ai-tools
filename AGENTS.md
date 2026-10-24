@@ -161,6 +161,24 @@ function getActiveUsers(users, minAge) {
 }
 ```
 
+# Best practices
+
+Always follow the best practices for this project's tech stack,
+patterns, logic and decisions.
+
+- **Tech stack:** use each tool and library the way its official
+  documentation recommends, for the version this project uses.
+- **Patterns:** follow the project's existing structure and conventions.
+  Use established, well-known patterns, and don't invent a new one when a
+  standard one fits.
+- **Logic:** keep it simple, readable and correct. Handle errors and edge
+  cases explicitly. Prefer clear code over clever code.
+- **Decisions:** choose the sound, maintainable option. State the choice
+  and the reason in a sentence, and name any trade-off. If you are not
+  sure what the best practice is, look it up or ask. Don't guess.
+- When the project's current approach is not best practice, say so and
+  suggest a fix. Don't silently copy it or silently change it.
+
 # Testing
 
 Follow test-driven development (TDD) for every change that adds or
