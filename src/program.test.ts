@@ -9,6 +9,7 @@ interface Recorded {
   installs: InstallCommandOptions[];
   mcpInstalls: McpInstallOptions[];
   mcpUninstalls: McpUninstallOptions[];
+  mcpLists: number;
   agents: number;
   uninstalls: number;
   skills: number;
@@ -16,7 +17,7 @@ interface Recorded {
 }
 
 async function run(args: string[]): Promise<Recorded> {
-  const recorded: Recorded = { installs: [], mcpInstalls: [], mcpUninstalls: [], agents: 0, uninstalls: 0, skills: 0, menus: 0 };
+  const recorded: Recorded = { installs: [], mcpInstalls: [], mcpUninstalls: [], mcpLists: 0, agents: 0, uninstalls: 0, skills: 0, menus: 0 };
   const handlers: ProgramHandlers = {
     install: async (options) => {
       recorded.installs.push(options);
@@ -26,6 +27,9 @@ async function run(args: string[]): Promise<Recorded> {
     },
     mcpUninstall: async (options) => {
       recorded.mcpUninstalls.push(options);
+    },
+    mcpList: async () => {
+      recorded.mcpLists += 1;
     },
     agents: async () => {
       recorded.agents += 1;
@@ -74,19 +78,19 @@ test("install uses empty defaults for the flags that were not given", async () =
 test("agents runs only the agents handler", async () => {
   const recorded = await run(["agents"]);
 
-  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], agents: 1, uninstalls: 0, skills: 0, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], mcpLists: 0, agents: 1, uninstalls: 0, skills: 0, menus: 0 });
 });
 
 test("uninstall runs only the uninstall handler", async () => {
   const recorded = await run(["uninstall"]);
 
-  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], agents: 0, uninstalls: 1, skills: 0, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], mcpLists: 0, agents: 0, uninstalls: 1, skills: 0, menus: 0 });
 });
 
 test("skills runs only the skills handler", async () => {
   const recorded = await run(["skills"]);
 
-  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], agents: 0, uninstalls: 0, skills: 1, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], mcpLists: 0, agents: 0, uninstalls: 0, skills: 1, menus: 0 });
 });
 
 test("the program is named ai-tools, to match the command in package.json", () => {
@@ -94,6 +98,7 @@ test("the program is named ai-tools, to match the command in package.json", () =
     install: async () => {},
     mcpInstall: async () => {},
     mcpUninstall: async () => {},
+    mcpList: async () => {},
     agents: async () => {},
     uninstall: async () => {},
     skills: async () => {},
@@ -106,7 +111,7 @@ test("the program is named ai-tools, to match the command in package.json", () =
 test("running with no command opens the menu", async () => {
   const recorded = await run([]);
 
-  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], agents: 0, uninstalls: 0, skills: 0, menus: 1 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], mcpUninstalls: [], mcpLists: 0, agents: 0, uninstalls: 0, skills: 0, menus: 1 });
 });
 
 test("mcp install passes the name, the command after -- and every flag", async () => {
@@ -172,4 +177,12 @@ test("mcp uninstall with nothing else passes empty values, so the handler asks",
   const { mcpUninstalls } = await run(["mcp", "uninstall"]);
 
   assert.deepEqual(mcpUninstalls, [{ name: undefined, agents: [], all: false, yes: false }]);
+});
+
+test("mcp list runs the list handler once", async () => {
+  const recorded = await run(["mcp", "list"]);
+
+  assert.equal(recorded.mcpLists, 1);
+  assert.deepEqual(recorded.mcpInstalls, []);
+  assert.deepEqual(recorded.mcpUninstalls, []);
 });

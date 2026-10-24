@@ -5,10 +5,12 @@ import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
+import { runListMcp } from "./list-mcp-command.ts";
 import { runListSkills } from "./list-skills-command.ts";
 import { runMcpInstall, type McpInstallOptions } from "./mcp-install-command.ts";
 import { runMcpUninstall, type McpUninstallOptions } from "./mcp-uninstall-command.ts";
 import { installMcpServer } from "./mcp/install.ts";
+import { listMcpServers } from "./mcp/list.ts";
 import { runCommand } from "./mcp/run-command.ts";
 import { findMcpServer, uninstallMcpServer } from "./mcp/uninstall.ts";
 import { runMenu, type MenuEntry } from "./menu.ts";
@@ -66,6 +68,18 @@ function mcpInstall(options: McpInstallOptions): Promise<void> {
         runCommand,
         onProgress,
       }),
+  });
+}
+
+function mcpList(): Promise<void> {
+  const { home, pathDirs } = defaultScanEnv();
+
+  return runListMcp({
+    scan,
+    list: (agents) =>
+      listMcpServers(agents, { home, env: process.env, isOnPath: (name) => isOnPath(name, pathDirs), runCommand }),
+    print,
+    colors,
   });
 }
 
@@ -127,6 +141,7 @@ const menuEntries: MenuEntry[] = [
   {
     name: "MCP servers",
     entries: [
+      { name: "List MCP servers", run: mcpList },
       { name: "Install an MCP server", run: () => mcpInstall({}) },
       { name: "Uninstall an MCP server", run: () => mcpUninstall({}) },
     ],
@@ -142,7 +157,7 @@ function menu(): Promise<void> {
   });
 }
 
-const handlers: ProgramHandlers = { install, mcpInstall, mcpUninstall, agents, uninstall, skills, menu };
+const handlers: ProgramHandlers = { install, mcpInstall, mcpUninstall, mcpList, agents, uninstall, skills, menu };
 
 process.exitCode = await runCli(buildProgram(handlers), process.argv.slice(2), {
   error: (line) => console.error(line),

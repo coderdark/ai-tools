@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { AGENTS } from "../agents/registry.ts";
 import type { McpServer } from "./server.ts";
-import { MCP_SETUPS, type McpCliSetup, type McpJsonFileSetup } from "./setups.ts";
+import { join } from "node:path";
+import { MCP_SETUPS, type McpCliSetup, type McpJsonFileSetup, type McpListSource } from "./setups.ts";
 
 const LOCAL: McpServer = {
   name: "fs",
@@ -183,4 +184,67 @@ test("each command line agent removes a server at user scope with its own remove
   assert.deepEqual(cli("chatgpt").remove("fs"), ["mcp", "remove", "fs"]);
   assert.deepEqual(cli("gemini").remove("fs"), ["mcp", "remove", "--scope", "user", "fs"]);
   assert.deepEqual(cli("grok").remove("fs"), ["mcp", "remove", "--scope", "user", "fs"]);
+});
+
+function listOf(id: keyof typeof MCP_SETUPS): McpListSource | undefined {
+  return MCP_SETUPS[id].list;
+}
+
+function commandListOf(id: keyof typeof MCP_SETUPS): Extract<McpListSource, { kind: "command" }> {
+  const source = listOf(id);
+
+  assert.equal(source?.kind, "command");
+
+  return source as Extract<McpListSource, { kind: "command" }>;
+}
+
+test("Cursor and Claude are listed by reading the servers in their own files, Claude's following CLAUDE_CONFIG_DIR", () => {
+  const cursor = listOf("cursor");
+  const claude = listOf("claude");
+
+  assert.equal(cursor?.kind, "file");
+  assert.equal(claude?.kind, "file");
+  assert.ok(cursor?.kind === "file" && claude?.kind === "file");
+  assert.equal(cursor.path("/home/me", {}), join("/home/me", ".cursor", "mcp.json"));
+  assert.equal(cursor.key, "mcpServers");
+  assert.equal(claude.path("/home/me", {}), join("/home/me", ".claude.json"));
+  assert.equal(claude.path("/home/me", { CLAUDE_CONFIG_DIR: "/cfg" }), join("/cfg", ".claude.json"));
+  assert.equal(claude.key, "mcpServers");
+  assert.match(claude.note ?? "", /User-level servers only/);
+});
+
+test("Codex is listed with its own json listing, which does not check the servers", () => {
+  const { command, args } = commandListOf("chatgpt");
+
+  assert.equal(command, "codex");
+  assert.deepEqual(args, ["mcp", "list", "--json"]);
+});
+
+test("Codex's listing is read for names and kinds, and nothing else", () => {
+  const { parse } = commandListOf("chatgpt");
+  const output = JSON.stringify([
+    { name: "a", transport: { type: "stdio", command: "npx", env: { TOKEN: "s3cret" } } },
+    { name: "b", transport: { type: "streamable_http", url: "https://x.test/mcp?key=s3cret" } },
+    { name: "c", transport: { type: "something-new" } },
+  ]);
+
+  assert.deepEqual(parse(output), [
+    { name: "a", kind: "local command" },
+    { name: "b", kind: "remote address" },
+    { name: "c", kind: "other" },
+  ]);
+  assert.deepEqual(parse("[]"), []);
+});
+
+test("Codex's listing refuses what is not a list of named servers", () => {
+  const { parse } = commandListOf("chatgpt");
+
+  assert.throws(() => parse("not json"));
+  assert.throws(() => parse("{}"));
+  assert.throws(() => parse(JSON.stringify([{ transport: {} }])));
+});
+
+test("Gemini and Grok have no list source, because their listings have not been confirmed on a real machine", () => {
+  assert.equal(listOf("gemini"), undefined);
+  assert.equal(listOf("grok"), undefined);
 });

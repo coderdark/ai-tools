@@ -7,6 +7,7 @@ export interface ProgramHandlers {
   install(options: InstallCommandOptions): Promise<void>;
   mcpInstall(options: McpInstallOptions): Promise<void>;
   mcpUninstall(options: McpUninstallOptions): Promise<void>;
+  mcpList(): Promise<void>;
   agents(): Promise<void>;
   uninstall(): Promise<void>;
   skills(): Promise<void>;
@@ -71,6 +72,11 @@ export function buildProgram(handlers: ProgramHandlers): Command {
   const mcp = program
     .command("mcp")
     .description("Manage the MCP servers of the AI agents on this computer.");
+
+  mcp
+    .command("list")
+    .description("List the MCP servers of the AI agents on this computer.")
+    .action(handlers.mcpList);
 
   mcp
     .command("install")

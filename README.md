@@ -106,6 +106,41 @@ The tool asks three questions:
 
 There are no flags yet, so this command needs a terminal. In a script it stops with an error and removes nothing.
 
+## List MCP servers
+
+```sh
+node dist/cli.js mcp list
+```
+
+Or pick **MCP servers**, then **List MCP servers**, in the menu. It prints one block per agent that was found: the file the servers are kept in, then each server's name and kind (`local command` or `remote address`).
+
+```
+Cursor  /Users/me/.cursor/mcp.json
+  cmd-demo     local command
+  remote-demo  remote address
+
+Claude  /Users/me/.claude.json
+  User-level servers only. Servers set up for one project are not listed.
+  cmd-demo     local command
+```
+
+How each agent is read. Nothing is started or contacted, because `claude mcp list` connects to every server and would run your local ones.
+
+| Agent   | How its servers are read                                   | How it was checked                            |
+| ------- | ---------------------------------------------------------- | --------------------------------------------- |
+| Cursor  | the `mcpServers` entry in `~/.cursor/mcp.json`             | a real file and a real run                    |
+| Claude  | the `mcpServers` entry in `~/.claude.json`                 | docs, a real file and a real run              |
+| ChatGPT | `codex mcp list --json`                                    | `--help` and a real run                       |
+| Gemini  | not listed yet                                             | **no listing has been confirmed. Gemini is not installed here.** |
+| Grok    | not listed yet                                             | **no listing has been confirmed. Grok is not installed here.**   |
+
+Things to know:
+
+- **Only names and kinds are shown.** The command, address, variables and headers can hold keys, so they are never printed. A server name is cleaned of terminal control codes before it is shown.
+- **Claude shows user-level servers only.** A server added for one project (`claude mcp add` without `--scope user`) is kept under that project in the same file and is not listed. It follows `CLAUDE_CONFIG_DIR` when that is set.
+- **A file that cannot be read is reported, not changed.** A Cursor file with comments shows `not listed: ... is not valid JSON`, and the file is left as it is.
+- **Gemini and Grok say `not listed`** until how to list their servers has been confirmed on a real machine. The tool does not guess.
+
 ## Install an MCP server
 
 An MCP server gives an agent extra tools. This adds one server to the user-level settings of the agents you pick, so it is available in all your projects. Project-level settings are not touched.

@@ -3,6 +3,19 @@ import { stripVTControlCharacters } from "node:util";
 import { AGENTS, type AgentId } from "../agents/registry.ts";
 import type { McpServer } from "./server.ts";
 
+export type McpServerKind = "local command" | "remote address" | "other";
+
+/** Only a name and a kind: the command, address, variables and headers can hold secrets and are never read out. */
+export interface ListedServer {
+  name: string;
+  kind: McpServerKind;
+}
+
+/** How to read the servers an agent has, without starting or contacting any of them. */
+export type McpListSource =
+  | { kind: "file"; path(home: string, env: NodeJS.ProcessEnv): string; key: string; note?: string }
+  | { kind: "command"; command: string; args: string[]; parse(stdout: string): ListedServer[] };
+
 /** How to ask an agent whether it now knows the server. */
 export interface McpCheck {
   command: string;
@@ -21,6 +34,8 @@ interface McpSetupFacts {
   savedIn?(home: string, env: NodeJS.ProcessEnv): string;
   /** Something the user should know about where the server will and will not show up. */
   scopeNote?: string;
+  /** Left out until a way to list the servers has been confirmed on a real machine. */
+  list?: McpListSource;
   /** Where a server that is already there lives, read from what the check command printed. */
   locateExisting?(checkOutput: string, home: string, env: NodeJS.ProcessEnv): ExistingPlace;
 }
@@ -105,6 +120,26 @@ function argsForGemini(args: string[]): string[] {
   return [...args.slice(0, firstOption), "--", ...args.slice(firstOption)];
 }
 
+const CODEX_KINDS: Record<string, McpServerKind> = { stdio: "local command", streamable_http: "remote address" };
+
+function parseCodexList(stdout: string): ListedServer[] {
+  const parsed: unknown = JSON.parse(stdout);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("codex did not print a list");
+  }
+
+  return parsed.map((item: { name?: unknown; transport?: { type?: unknown } }) => {
+    if (typeof item?.name !== "string") {
+      throw new Error("codex printed a server without a name");
+    }
+
+    const type = item.transport?.type;
+
+    return { name: item.name, kind: (typeof type === "string" && CODEX_KINDS[type]) || "other" };
+  });
+}
+
 function claudeFile(home: string, env: NodeJS.ProcessEnv): string {
   return join(env.CLAUDE_CONFIG_DIR || home, ".claude.json");
 }
@@ -115,6 +150,12 @@ const claude: McpCliSetup = {
   source: "https://code.claude.com/docs/en/mcp",
   verified: "docs, `claude mcp add --help`, `claude mcp remove --help` and real runs",
   savedIn: claudeFile,
+  list: {
+    kind: "file",
+    path: claudeFile,
+    key: "mcpServers",
+    note: "User-level servers only. Servers set up for one project are not listed.",
+  },
   locateExisting(output, home, env) {
     const scope = /^\s*Scope:\s*(.+)$/m.exec(stripVTControlCharacters(output))?.[1]?.trim();
 
@@ -148,6 +189,7 @@ const chatgpt: McpCliSetup = {
   source: "https://developers.openai.com/codex/mcp",
   verified: "docs, `codex mcp add --help`, `codex mcp remove --help` and real runs",
   savedIn: (home, env) => join(env.CODEX_HOME || join(home, ".codex"), "config.toml"),
+  list: { kind: "command", command: binaryOf("chatgpt"), args: ["mcp", "list", "--json"], parse: parseCodexList },
   check: {
     command: binaryOf("chatgpt"),
     args: (name) => ["mcp", "get", name, "--json"],
@@ -220,6 +262,7 @@ const cursor: McpJsonFileSetup = {
   kind: "json-file",
   path: CURSOR_FILE,
   savedIn: (home) => join(home, ...CURSOR_FILE),
+  list: { kind: "file", path: (home) => join(home, ...CURSOR_FILE), key: "mcpServers" },
   key: "mcpServers",
   source: "https://cursor.com/docs/context/mcp",
   verified: "docs, a real ~/.cursor/mcp.json and a real run: `agent mcp list` listed the entry",

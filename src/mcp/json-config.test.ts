@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { chmod, lstat, mkdir, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTempRoot } from "../test-support.ts";
-import { addToJsonConfig, checkJsonConfig, McpConfigError, removeFromJsonConfig } from "./json-config.ts";
+import {
+  addToJsonConfig,
+  checkJsonConfig,
+  listJsonConfig,
+  McpConfigError,
+  removeFromJsonConfig,
+} from "./json-config.ts";
 
 const ENTRY = { type: "stdio", command: "npx", args: ["-y", "pkg"] };
 
@@ -225,4 +231,37 @@ test("removeFromJsonConfig keeps the file's permissions and writes through a sym
   assert.equal((await lstat(link)).isSymbolicLink(), true);
   assert.deepEqual(await readJson(real), { mcpServers: {} });
   assert.equal((await stat(real)).mode & 0o777, 0o640);
+});
+
+test("listJsonConfig gives each server's name and entry, and ignores everything else in the file", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, JSON.stringify({ theme: "dark", mcpServers: { fs: ENTRY, api: { url: "https://x.test" } } }));
+
+  assert.deepEqual(await listJsonConfig(path, "mcpServers"), [
+    { name: "fs", entry: ENTRY },
+    { name: "api", entry: { url: "https://x.test" } },
+  ]);
+});
+
+test("listJsonConfig gives an empty list when the file or the servers are missing, and creates nothing", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, JSON.stringify({ theme: "dark" }));
+
+  assert.deepEqual(await listJsonConfig(join(root, "missing.json"), "mcpServers"), []);
+  assert.deepEqual(await listJsonConfig(path, "mcpServers"), []);
+  assert.deepEqual(await readdir(root), ["mcp.json"]);
+});
+
+test("listJsonConfig refuses a file it cannot read, and leaves it unchanged", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, "not json");
+
+  await assert.rejects(listJsonConfig(path, "mcpServers"), McpConfigError);
+  assert.equal(await readFile(path, "utf8"), "not json");
 });

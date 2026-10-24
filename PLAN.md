@@ -152,6 +152,24 @@ Rules:
 - **Results.** One line per agent: `uninstalled from <file>`, `not installed`, `failed: ...` or `skipped: ...`. Not installed is not an error. If any agent failed or was skipped, every line is printed and the tool exits with code 1. There is no rollback and no undo.
 - **Name only.** Any server with the name is removed, including one the tool did not add.
 
+## List MCP servers
+
+`ai-tools mcp list`, or **MCP servers** then **List MCP servers** in the menu, prints the servers of each agent the scan found. It is the MCP version of `ai-tools skills`: one block per agent.
+
+**Nothing is started.** `claude mcp list` health-checks every approved server, which connects to it and runs local ones (a real run showed it trying to start `npx -y some-pkg`), so it is not used. Each agent is read the way that starts nothing:
+
+- **Cursor.** The `mcpServers` object in `~/.cursor/mcp.json`.
+- **Claude.** The top-level `mcpServers` object in `~/.claude.json`, which is where `--scope user` writes (docs, real file). Servers added for one project sit under `projects.<path>.mcpServers` and are not read, so the list says it shows user-level servers only. `CLAUDE_CONFIG_DIR` moves the file, as for install.
+- **ChatGPT (Codex).** `codex mcp list --json` (`--help`, real run). It reads the config and does not check the servers.
+- **Gemini and Grok.** No source. Their list commands are documented, but `gemini mcp list` checks each server and neither tool is installed here, so nothing was confirmed. The list says `not listed` instead of guessing. **Unverified.**
+
+Rules:
+
+- **Names and kinds only.** The kind comes from the entry's shape (a `url` is a remote address, a `command` is a local command) or from the transport type Codex reports. The command, address, variables and headers are never read out.
+- **Names are cleaned.** They come from files other programs write, so terminal control codes are removed before printing.
+- **Nothing is changed.** A missing file is an empty list and is not created; a file that is not valid JSON is reported and left alone.
+- **A problem with one agent does not stop the others.** An agent whose command is not on `PATH`, or whose file cannot be read, shows `not listed: <reason>`.
+
 ## Tech stack and layout
 
 TypeScript on Node 24. Commander, `@inquirer/prompts`, chalk, and ora are all ES-module-only, so the package sets `"type": "module"` and compiles with `NodeNext` module settings. Tests use `node:test` and call the scan and install functions directly, with a temporary home directory. They do not open prompts. Dev dependencies are `typescript` and `@types/node` at major version 24 to match the runtime. Runtime dependencies are `commander`, `@inquirer/prompts`, `@inquirer/core`, `chalk`, `ora`, `yaml`, and `string-argv`. `string-argv` (MIT, no dependencies, 10 KB) splits a typed command line such as `npx -y pkg "my folder"` into words and keeps quoted text together, so no splitting code is hand-written. The `yaml` package parses `SKILL.md` frontmatter, because real skills use folded blocks (`>-`), quoted text, and plain text that a hand-written parser would misread.
@@ -181,12 +199,14 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/format.ts` — the agent list lines, the skill list lines, one skill's details, one agent's details, the agents list rows with their skill counts and the "Installed in … on …" line
 - `src/agents/registry.ts` — the five agents and their detection signals and skill paths
 - `src/mcp/server.ts` — the `McpServer` type, the checks for a name, address, variable, header and command line, and the one-line description that never shows a value
-- `src/mcp/setups.ts` — one entry per agent: the `mcp add` and `mcp remove` arguments (or Cursor's entry shape), the check command, where the file is, the source link and how it was verified
+- `src/mcp/setups.ts` — one entry per agent: the `mcp add` and `mcp remove` arguments (or Cursor's entry shape), the check command, where the file is, how to list its servers, the source link and how it was verified
 - `src/mcp/json-config.ts` — adds a server to, or removes one from, a JSON settings file, keeping everything else, refusing a file it cannot read (and a name that exists, when adding)
 - `src/mcp/check.ts` — asks an agent whether it has a server with a name (its own check command, or Cursor's file), and where; shared by install and uninstall
 - `src/mcp/run-command.ts` — runs an agent's command with no shell, a time limit and messages that hide the arguments
 - `src/mcp/install.ts` — checks every agent, adds the server, asks each agent to confirm. The command runner is passed in, so tests use a fake agent.
 - `src/mcp-install-command.ts` — the MCP install flow: questions, flags, agent choice, confirm, report. Prompts, the installer, spinner and output are passed in.
+- `src/mcp/list.ts` — reads the servers each agent has from its own file or listing command, names and kinds only, never starting a server
+- `src/list-mcp-command.ts` — prints the MCP list: one block per agent. The lister, scan and output are passed in.
 - `src/mcp/uninstall.ts` — finds which agents have a server and removes it with each agent's own command (or from Cursor's file), then asks again. The command runner is passed in.
 - `src/mcp-uninstall-command.ts` — the MCP uninstall flow: name, agents that have it, confirm, report.
 - `src/agents/summary.ts` — counts the skills each found agent has, for the agents list

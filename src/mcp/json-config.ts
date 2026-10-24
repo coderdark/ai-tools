@@ -149,3 +149,11 @@ export async function removeFromJsonConfig(path: string, key: string, name: stri
 
   return true;
 }
+
+/** Every server under `key`, in file order. A missing file or key is an empty list. Changes nothing. */
+export async function listJsonConfig(path: string, key: string): Promise<{ name: string; entry: unknown }[]> {
+  const target = await realpath(path).catch(() => path);
+  const servers = readServers(await readConfig(target), key, target);
+
+  return Object.entries(servers).map(([name, entry]) => ({ name, entry }));
+}
