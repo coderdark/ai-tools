@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import chalk, { type ChalkInstance } from "chalk";
 import type { ScanResult } from "./agents/scan.ts";
 import type { InstalledSkill } from "./skills/list.ts";
@@ -18,6 +19,20 @@ export function formatAgentList(
 
     return `${colors.green(status)}  ${name}  ${colors.cyan(skillsDir)}`;
   });
+}
+
+export function formatSkillDetails(
+  { name, targets }: InstalledSkill,
+  colors: ChalkInstance = chalk,
+): string[] {
+  const nameWidth = Math.max(...targets.map(({ agent }) => agent.name.length));
+
+  const folders = targets.map(
+    ({ agent, skillsDir }) =>
+      `  ${agent.name.padEnd(nameWidth)}  ${colors.cyan(join(skillsDir, name))}`,
+  );
+
+  return [name, ...folders];
 }
 
 export function formatSkillList(skills: InstalledSkill[], colors: ChalkInstance = chalk): string[] {

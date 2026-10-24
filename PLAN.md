@@ -38,7 +38,7 @@ flowchart TD
   menu --> done["Exit"]
 ```
 
-`ai-tools` with no command opens a menu with **Skills**, **Agents** and **Exit**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** prints the agent list. Each action scans when it is chosen. After an action ends, the menu it was chosen from is shown again, so the user stays in **Skills** until they pick **Back**. The user leaves with **Exit** (exit code 0) or Ctrl+C (exit code 130). **Agents** prints the scan, and `ai-tools agents` prints that same list with no menu. **List skills** prints the installed skills, and `ai-tools skills` prints that same list with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
+`ai-tools` with no command opens a menu with **Skills**, **Agents** and **Exit**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** prints the agent list. Each action scans when it is chosen. After an action ends, the menu it was chosen from is shown again, so the user stays in **Skills** until they pick **Back**. The user leaves with **Exit** (exit code 0) or Ctrl+C (exit code 130). **Agents** prints the scan, and `ai-tools agents` prints that same list with no menu. **List skills** opens a list of the installed skills that the user moves through, and `ai-tools skills` prints the same skills as plain lines with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
 
 Install prompts, in order:
 
@@ -83,6 +83,8 @@ Prompts, in order:
 
 `ai-tools skills` prints one line per skill, sorted by name: the name padded to the widest name, then the agents that have it in dim text, such as `review-pr  Cursor, Claude`. It uses the same list as uninstall, so the validity rules above apply and skills added by hand are included. Only agents the scan found are read. It asks no questions and works without a terminal. If no agent is found it is an error. If no skills are installed it prints "No skills are installed in the agents that were found." and exits with 0. It prints no description, because that would need `SKILL.md` to be read for every skill.
 
+In the menu, **List skills** shows the same skills as a list with a highlighted row, like the skill list in uninstall. The line under the highlighted row says which agents have it (`Installed in Cursor, Claude`). Enter on a skill prints its details and shows the list again: the skill name, then each agent with the skill's folder. **Back** leaves the list, and so does Esc: the footer reads `↑↓ navigate • ⏎ select • esc back`. Inquirer's list has no Esc key, so `src/escape.ts` listens for it on stdin and cancels the prompt with an `AbortSignal`, which Inquirer supports. Esc works only on this list for now; the menus still use their **Back** and **Exit** rows. A lone Esc takes about half a second to register, because the terminal waits to see whether it starts an arrow-key sequence. It changes nothing on disk. It needs a terminal, as the rest of the menu does. A pager (`less`) was tried first and dropped: a list shorter than the screen never opened it, so nothing could be moved through.
+
 ## Presentation
 
 [Commander](https://github.com/tj/commander.js) defines the commands and flags. [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) runs the menu, path prompt, checkbox, and confirm. [chalk](https://github.com/chalk/chalk) colors output. [ora](https://github.com/sindresorhus/ora) is the spinner for install and uninstall.
@@ -118,17 +120,19 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/install-command.ts` — the install flow: choose, confirm, install, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/selection.ts` — turns `--agent` and `--all` into install targets
 - `src/agent-choices.ts` — the checkbox rows, with **All** first, and the selection they produce
+- `src/escape.ts` — runs a prompt and cancels it when Esc is pressed. The key source is passed in, so tests use a fake.
 - `src/prompts.ts` — the real `@inquirer/prompts` prompts. A thin wrapper with no test of its own; it is checked by running the built tool.
 - `src/progress.ts` — the `ora` spinner, plain when `NO_COLOR` is set
 - `src/colors.ts` — chalk, off when `NO_COLOR` is set
-- `src/format.ts` — the agent list lines and the skill list lines
+- `src/format.ts` — the agent list lines, the skill list lines and one skill's details
 - `src/agents/registry.ts` — the five agents and their detection signals and skill paths
 - `src/agents/scan.ts` — the scan of home, `PATH`, and Applications
 - `src/skills/skill.ts` — read and validate `SKILL.md`
 - `src/skills/install.ts` — check destinations, copy, and roll back
 - `src/skills/list.ts` — find the valid skills installed in each agent's skills folder, grouped by name
 - `src/skills/uninstall.ts` — check every destination, then remove the skill folders
-- `src/list-skills-command.ts` — the list skills flow: scan, list, print. Output is passed in, so tests use fakes.
+- `src/list-skills-command.ts` — the `skills` command: scan, list, print. It also holds the scan-and-read step that browsing shares. Output is passed in, so tests use fakes.
+- `src/browse-skills-command.ts` — the menu's list skills flow: choose a skill, show its details, ask again until Back. Prompts and output are passed in, so tests use fakes.
 - `src/uninstall-command.ts` — the uninstall flow: list, choose, confirm, remove, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/**/*.test.ts` — one test file beside each module above that has tests, using a temporary home directory
 - `src/test-support.ts` — shared test helpers, excluded from the build

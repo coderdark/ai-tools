@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Chalk } from "chalk";
 import { AGENTS, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
-import { formatAgentList, formatSkillList } from "./format.ts";
+import { formatAgentList, formatSkillDetails, formatSkillList } from "./format.ts";
 import type { InstalledSkill } from "./skills/list.ts";
 
 const plain = new Chalk({ level: 0 });
@@ -65,4 +65,26 @@ test("formatSkillList dims the agent names", () => {
   const [line] = formatSkillList(skillsOn({ "review-pr": ["cursor", "claude"] }), colored);
 
   assert.equal(line, `review-pr  ${colored.dim("Cursor, Claude")}`);
+});
+
+test("formatSkillDetails prints the skill name, then each agent with the skill's folder", () => {
+  const [skill] = skillsOn({ "review-pr": ["cursor", "claude"] });
+
+  assert.ok(skill);
+  assert.deepEqual(formatSkillDetails(skill, plain), [
+    "review-pr",
+    "  Cursor  /home/.cursor/skills/review-pr",
+    "  Claude  /home/.claude/skills/review-pr",
+  ]);
+});
+
+test("formatSkillDetails lines up the folders and colors them cyan", () => {
+  const [skill] = skillsOn({ alpha: ["chatgpt", "claude"] });
+
+  assert.ok(skill);
+  assert.deepEqual(formatSkillDetails(skill, colored), [
+    "alpha",
+    `  ChatGPT  ${colored.cyan("/home/.chatgpt/skills/alpha")}`,
+    `  Claude   ${colored.cyan("/home/.claude/skills/alpha")}`,
+  ]);
 });

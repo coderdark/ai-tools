@@ -1,8 +1,12 @@
 import { checkbox, confirm, input, select } from "@inquirer/prompts";
 import { resolve } from "node:path";
+import { styleText } from "node:util";
 import type { AgentId } from "./agents/registry.ts";
 import { buildAgentChoices, toSelectionRequest, type AgentChoiceValue } from "./agent-choices.ts";
+import type { BrowseSkillsPrompts } from "./browse-skills-command.ts";
+import { runUntilEscape } from "./escape.ts";
 import type { InstallPrompts } from "./install-command.ts";
+import type { InstalledSkill } from "./skills/list.ts";
 import { readSkill } from "./skills/skill.ts";
 import type { UninstallPrompts } from "./uninstall-command.ts";
 
@@ -11,6 +15,20 @@ async function validateSkillDir(value: string): Promise<true | string> {
     () => true,
     (error: unknown) => (error instanceof Error ? error.message : String(error)),
   );
+}
+
+function describeInstalledIn({ targets }: InstalledSkill): string {
+  return `Installed in ${targets.map(({ agent }) => agent.name).join(", ")}`;
+}
+
+const BACK = -1;
+
+function keysHelpTipWithEscape(keys: [key: string, action: string][]): string {
+  const allKeys: [key: string, action: string][] = [...keys, ["esc", "back"]];
+
+  return allKeys
+    .map(([key, action]) => `${styleText("bold", key)} ${styleText("dim", action)}`)
+    .join(styleText("dim", " • "));
 }
 
 export const terminalPrompts: InstallPrompts = {
@@ -46,10 +64,10 @@ export const terminalUninstallPrompts: UninstallPrompts = {
   skill(skills) {
     return select({
       message: "Which skill should be removed?",
-      choices: skills.map(({ name, targets }) => ({
-        name,
-        value: name,
-        description: `Installed in ${targets.map(({ agent }) => agent.name).join(", ")}`,
+      choices: skills.map((skill) => ({
+        name: skill.name,
+        value: skill.name,
+        description: describeInstalledIn(skill),
       })),
     });
   },
@@ -72,5 +90,31 @@ export const terminalUninstallPrompts: UninstallPrompts = {
       message: `Remove ${name} from ${agentNames.join(", ")}? This cannot be undone.`,
       default: false,
     });
+  },
+};
+
+export const terminalBrowsePrompts: BrowseSkillsPrompts = {
+  async skill(skills) {
+    const index = await runUntilEscape(
+      (signal) =>
+        select<number>(
+          {
+            message: "Which skill do you want to look at?",
+            choices: [
+              ...skills.map((skill, position) => ({
+                name: skill.name,
+                value: position,
+                description: describeInstalledIn(skill),
+              })),
+              { name: "Back", value: BACK },
+            ],
+            theme: { style: { keysHelpTip: keysHelpTipWithEscape } },
+          },
+          { signal },
+        ),
+      process.stdin,
+    );
+
+    return index === undefined ? undefined : skills[index];
   },
 };

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { select } from "@inquirer/prompts";
 import { defaultScanEnv, scanAgents } from "./agents/scan.ts";
+import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
@@ -8,7 +9,7 @@ import { runListSkills } from "./list-skills-command.ts";
 import { runMenu, type MenuEntry, type MenuRequest } from "./menu.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
-import { terminalPrompts, terminalUninstallPrompts } from "./prompts.ts";
+import { terminalBrowsePrompts, terminalPrompts, terminalUninstallPrompts } from "./prompts.ts";
 import { runCli } from "./run-cli.ts";
 import { runUninstall } from "./uninstall-command.ts";
 
@@ -49,6 +50,10 @@ function skills(): Promise<void> {
   return runListSkills({ scan, print, colors });
 }
 
+function browseSkills(): Promise<void> {
+  return runBrowseSkills({ scan, prompts: terminalBrowsePrompts, print, colors });
+}
+
 async function agents(): Promise<void> {
   for (const line of formatAgentList(scan(), colors)) {
     print(line);
@@ -59,7 +64,7 @@ const menuEntries: MenuEntry[] = [
   {
     name: "Skills",
     entries: [
-      { name: "List skills", run: skills },
+      { name: "List skills", run: browseSkills },
       { name: "Install a skill", run: () => install({}) },
       { name: "Uninstall a skill", run: uninstall },
     ],

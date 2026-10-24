@@ -37,6 +37,8 @@ Run it with no command to get a menu. It has two entries: **Skills** (list, inst
 node dist/cli.js
 ```
 
+In the menu, **List skills** opens a list you move through with the arrow keys. The line under the highlighted skill shows which agents have it. Press Enter on a skill to see its folders. Press Esc, or choose **Back**, to leave the list.
+
 The menu needs a terminal. In a script it stops with an error, so use a command such as `skills` there. If an action fails, for example because a skill already exists, the error shows in red and you go back to the menu.
 
 List the agents that were found:
@@ -56,7 +58,7 @@ alpha      Claude
 review-pr  Cursor, Claude
 ```
 
-This list is the same one the remove command shows, including skills you added by hand. It asks no questions, so it works in a script. If no agents are found it stops with an error. If no skills are installed it says so.
+This list is the same one the remove command shows, including skills you added by hand. The command only prints, so it works in a script. The menu's **List skills** is the one you can move through. If no agents are found it stops with an error. If no skills are installed it says so.
 
 Install a skill. Anything you leave out, the tool asks for:
 
