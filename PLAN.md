@@ -52,7 +52,9 @@ These flags skip the prompts they already answer, so a full command can run with
 - Create the agent skills directory when it is missing.
 - If a chosen destination already exists, copy nothing unless `--force` is set. `--force` replaces that destination only.
 - A named agent that is unknown or absent from the scan fails the command before any copy. `--all` means every agent the scan found.
-- Check every destination, then copy, so a failure does not leave a partial install.
+- Check every destination, then copy. If a copy fails part-way, remove the new copies made so far and report which agent failed. A destination replaced with `--force` is not restored, because its old contents are already gone.
+- Refuse to install a skill onto itself, with or without `--force`. Installing from `~/.claude/skills/<name>` into Claude would otherwise delete the source before copying it.
+- Report progress before each copy so the spinner can show the current agent.
 
 ## Presentation
 
@@ -62,12 +64,22 @@ Found agents are green, missing agents are dim, and skill paths are cyan. After 
 
 ## Tech stack and layout
 
-TypeScript on Node 24. Commander, `@inquirer/prompts`, chalk, and ora are all ES-module-only, so the package sets `"type": "module"` and compiles with `NodeNext` module settings. Tests use `node:test` and call the scan and install functions directly, with a temporary home directory. They do not open prompts. Dev dependencies are `typescript` and `@types/node` at major version 24 to match the runtime. Runtime dependencies are `commander`, `@inquirer/prompts`, `chalk`, and `ora`.
+TypeScript on Node 24. Commander, `@inquirer/prompts`, chalk, and ora are all ES-module-only, so the package sets `"type": "module"` and compiles with `NodeNext` module settings. Tests use `node:test` and call the scan and install functions directly, with a temporary home directory. They do not open prompts. Dev dependencies are `typescript` and `@types/node` at major version 24 to match the runtime. Runtime dependencies are `commander`, `@inquirer/prompts`, `chalk`, `ora`, and `yaml`. The `yaml` package parses `SKILL.md` frontmatter, because real skills use folded blocks (`>-`), quoted text, and plain text that a hand-written parser would misread.
 
-- `package.json` — bin `ai-toolbox`, scripts `build` and `test`
+Node strips types without checking them and ignores `tsconfig.json`, so these rules apply (from the Node TypeScript docs):
+
+- `npm test` runs `node --test "src/**/*.test.ts"`. `npm run typecheck` runs `tsc --noEmit`. `npm run build` compiles `src/` to `dist/` with `tsconfig.build.json`, which excludes the test files and `src/test-support.ts`.
+- Each test file sits next to the module it covers, such as `skill.ts` and `skill.test.ts`.
+- `tsconfig.json` sets `module: nodenext`, `rewriteRelativeImportExtensions`, `erasableSyntaxOnly`, and `verbatimModuleSyntax`.
+- Relative imports use the `.ts` extension, and the code does not use `enum` or other syntax that cannot be erased.
+
+- `package.json` — bin `ai-toolbox`, scripts `build`, `typecheck`, and `test`
 - `src/cli.ts` — commands, prompts, color, and the spinner
-- `src/agents/registry.ts` — the five agents, the scan, and skill paths
-- `src/skills/install.ts` — parse `SKILL.md`, validate, and copy
-- `test/install.test.ts` — scan results, a successful copy, **All** writing only found agents, a missing `SKILL.md`, an existing destination, an unknown agent, and no write to `~/.agents/skills`
+- `src/agents/registry.ts` — the five agents and their detection signals and skill paths
+- `src/agents/scan.ts` — the scan of home, `PATH`, and Applications
+- `src/skills/skill.ts` — read and validate `SKILL.md`
+- `src/skills/install.ts` — check destinations, copy, and roll back
+- `src/**/*.test.ts` — one test file beside each module above, using a temporary home directory
+- `src/test-support.ts` — shared test helpers, excluded from the build
 
 Usage is in `ai-toolbox --help`.

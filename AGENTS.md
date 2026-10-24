@@ -173,6 +173,13 @@ patterns, logic and decisions.
   standard one fits.
 - **Logic:** keep it simple, readable and correct. Handle errors and edge
   cases explicitly. Prefer clear code over clever code.
+- **Libraries over custom code:** prefer a well-maintained library or
+  framework to writing custom code for the same job. Before writing a
+  parser, validator, helper or other general-purpose code, check whether
+  the platform or a trusted library already does it. Write custom code
+  only when nothing suitable exists or the dependency would cost more
+  than it saves, and say why. Check a library's maintenance, license and
+  size before adding it, and tell the user which dependency you added.
 - **Decisions:** choose the sound, maintainable option. State the choice
   and the reason in a sentence, and name any trade-off. If you are not
   sure what the best practice is, look it up or ask. Don't guess.
@@ -194,6 +201,11 @@ pass.
 
 - Work on one behavior at a time. Don't write production code without a
   failing test that needs it.
+- Any time you change logic or add new code, update the existing tests or
+  write new tests for that code in the same change. This applies to bug
+  fixes, refactors that touch behavior, and new files or functions.
+- If a change makes an existing test wrong, update that test on purpose
+  and say why. Don't leave outdated tests behind.
 - Don't call a task done until the full test suite passes.
 - If a test fails, fix the code or the test, then run it again. Don't
   skip, delete or weaken a test to get to green.
