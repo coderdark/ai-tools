@@ -82,14 +82,17 @@ export const terminalPrompts: InstallPrompts = {
 
 export const terminalUninstallPrompts: UninstallPrompts = {
   skill(skills) {
-    return selectWithEscape<string>({
-      message: "Which skill should be removed?",
-      choices: skills.map((skill) => ({
-        name: skill.name,
-        value: skill.name,
-        description: formatInstalledIn(skill),
-      })),
-    });
+    return selectWithEscape<string>(
+      {
+        message: "Which skill should be removed?",
+        choices: skills.map((skill) => ({
+          name: skill.name,
+          value: skill.name,
+          description: formatInstalledIn(skill),
+        })),
+      },
+      "cancel",
+    );
   },
 
   agents(skill) {
