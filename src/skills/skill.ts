@@ -13,6 +13,10 @@ export class SkillError extends Error {}
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 const VALID_NAME = /^[a-z0-9-]{1,64}$/;
 
+export function isValidSkillName(name: string): boolean {
+  return VALID_NAME.test(name);
+}
+
 async function assertDirectory(dir: string): Promise<void> {
   const info = await stat(dir).catch(() => undefined);
 
@@ -42,7 +46,7 @@ export async function readSkill(dir: string): Promise<Skill> {
   const name = String(data.name ?? basename(dir));
   const description = String(data.description ?? "").trim();
 
-  if (!VALID_NAME.test(name)) {
+  if (!isValidSkillName(name)) {
     throw new SkillError(
       `invalid name "${name}": use 1-64 lowercase letters, numbers, and hyphens`,
     );

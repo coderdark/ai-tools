@@ -65,7 +65,7 @@ function formatCursorNotes(
     );
 }
 
-function formatOutcomes(outcomes: InstallOutcome[], colors: ChalkInstance): string[] {
+export function formatOutcomes(outcomes: InstallOutcome[], colors: ChalkInstance): string[] {
   const nameWidth = Math.max(...outcomes.map(({ agent }) => agent.name.length));
 
   return outcomes.map(

@@ -1,11 +1,11 @@
 {
-  "name": "ai-toolbox",
+  "name": "ai-tools",
   "version": "0.1.0",
   "description": "Scan this computer for AI agents and install skills into them.",
   "type": "module",
   "private": true,
   "bin": {
-    "ai-toolbox": "dist/cli.js"
+    "ai-tools": "dist/cli.js"
   },
   "files": [
     "dist"

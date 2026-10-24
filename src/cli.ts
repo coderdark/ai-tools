@@ -6,8 +6,9 @@ import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
-import { terminalPrompts } from "./prompts.ts";
+import { terminalPrompts, terminalUninstallPrompts } from "./prompts.ts";
 import { runCli } from "./run-cli.ts";
+import { runUninstall } from "./uninstall-command.ts";
 
 const colors = createColors();
 const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -31,6 +32,17 @@ function install(options: InstallCommandOptions): Promise<void> {
   });
 }
 
+function uninstall(): Promise<void> {
+  return runUninstall({
+    scan,
+    prompts: terminalUninstallPrompts,
+    progress: createProgress(),
+    print,
+    interactive,
+    colors,
+  });
+}
+
 async function agents(): Promise<void> {
   for (const line of formatAgentList(scan(), colors)) {
     print(line);
@@ -42,6 +54,7 @@ async function menu(): Promise<void> {
     message: "What would you like to do?",
     choices: [
       { name: "Install a skill", value: "install" },
+      { name: "Uninstall a skill", value: "uninstall" },
       { name: "Show agents", value: "agents" },
     ],
   });
@@ -52,10 +65,16 @@ async function menu(): Promise<void> {
     return;
   }
 
+  if (choice === "uninstall") {
+    await uninstall();
+
+    return;
+  }
+
   await agents();
 }
 
-const handlers: ProgramHandlers = { install, agents, menu };
+const handlers: ProgramHandlers = { install, agents, uninstall, menu };
 
 process.exitCode = await runCli(buildProgram(handlers), process.argv.slice(2), {
   error: (line) => console.error(line),

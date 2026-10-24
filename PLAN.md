@@ -1,14 +1,14 @@
-# Phase 1: install local skills per agent
+# Phase 1: install and remove local skills per agent
 
-Phase 1 is an interactive Node CLI named `ai-toolbox`. It only installs skills. Plugins, MCP servers, delete, and project-scoped skills stay out of this phase. Each agent lives in one registry so later actions can reuse the same scan.
+Phase 1 is an interactive Node CLI named `ai-tools`. It installs and removes skills. Plugins, MCP servers, and project-scoped skills stay out of this phase. Each agent lives in one registry so later actions can reuse the same scan.
 
 A skill is a folder already on disk that contains `SKILL.md`. The CLI copies the whole folder, except `.git`, into each chosen agent’s user skills directory. It does not download from git and it does not move the source.
 
 ## Scan
 
-Every command that lists or installs scans this machine first, before it asks about a skill or agents. The scan checks known locations only: a config directory in the home folder, a CLI on `PATH`, and an app in `/Applications` or `~/Applications`. It does not walk the whole disk. An agent is available when any one of its signals is found.
+Every command that lists, installs or removes scans this machine first, before it asks about a skill or agents. The scan checks known locations only: a config directory in the home folder, a CLI on `PATH`, and an app in `/Applications` or `~/Applications`. It does not walk the whole disk. An agent is available when any one of its signals is found.
 
-The same scan result feeds the agent list and the install checkbox. Agents the scan does not find are listed by `ai-toolbox agents` and omitted from the checkbox. Install never targets them.
+The same scan result feeds the agent list and the install checkbox. Agents the scan does not find are listed by `ai-tools agents` and omitted from the checkbox. Install never targets them.
 
 - **Cursor** — `~/.cursor`, `cursor`, or `Cursor.app`. Writes `~/.cursor/skills/<name>`. Never write `~/.cursor/skills-cursor`.
 - **Claude** — `~/.claude`, `claude`, or `Claude.app`. Writes `~/.claude/skills/<name>`.
@@ -24,7 +24,7 @@ On the machine this was planned on, the scan finds Cursor, Claude, and ChatGPT. 
 
 ```mermaid
 flowchart TD
-  start["ai-toolbox"] --> menu["Install a skill or show agents"]
+  start["ai-tools"] --> menu["Install a skill, uninstall a skill, or show agents"]
   menu --> show["Scan, then print found and missing agents"]
   menu --> scan["Scan home, PATH, and Applications"]
   scan --> path["Prompt for the skill folder"]
@@ -33,7 +33,7 @@ flowchart TD
   confirm --> copy["Copy into each chosen skill directory"]
 ```
 
-`ai-toolbox` with no command offers **Install a skill** or **Show agents**, and scans once one is chosen. Show agents prints the scan and stops. `ai-toolbox agents` prints that same list with no menu. `ai-toolbox install` skips the menu and starts at the skill folder.
+`ai-tools` with no command offers **Install a skill**, **Uninstall a skill** or **Show agents**, and scans once one is chosen. Show agents prints the scan and stops. `ai-tools agents` prints that same list with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
 
 Install prompts, in order:
 
@@ -43,8 +43,8 @@ Install prompts, in order:
 
 These flags skip the prompts they already answer, so a full command can run without a terminal. `--agent` is repeatable. `--agent` and `--all` cannot be used together. `--yes` skips confirm. `--force` replaces an existing destination. If a required value is missing and stdin or stdout is not a terminal, exit with an error that names the flag to pass, instead of prompting.
 
-- `ai-toolbox install <skill-dir> --agent cursor --agent claude`
-- `ai-toolbox install <skill-dir> --all`
+- `ai-tools install <skill-dir> --agent cursor --agent claude`
+- `ai-tools install <skill-dir> --all`
 
 ## Install rules
 
@@ -56,9 +56,27 @@ These flags skip the prompts they already answer, so a full command can run with
 - Refuse to install a skill onto itself, with or without `--force`. Installing from `~/.claude/skills/<name>` into Claude would otherwise delete the source before copying it.
 - Report progress before each copy so the spinner can show the current agent.
 
+## Uninstall rules
+
+`ai-tools uninstall` takes no flags. The user picks the skill from a list, so a script cannot name one. If stdin or stdout is not a terminal, it exits with an error and removes nothing. A name argument and the `--agent`, `--all` and `--yes` flags can be added later without changing this flow.
+
+Prompts, in order:
+
+1. **Skill.** One list of every skill found in the skills folders of the agents the scan found, sorted by name. Each row shows which agents have it.
+2. **Agents.** One checkbox of only the agents that have that skill, all ticked. If none is selected, the command stops with an error.
+3. **Confirm.** Names the skill and the agents and says it cannot be undone. The default answer is No. Declining removes nothing.
+
+- A row is listed only when its folder name is valid (the same 1–64 character rule as install) and the folder contains a `SKILL.md`. Loose files, folders without `SKILL.md`, and folders such as `.system` are not listed. A skills folder that does not exist counts as empty. `~/.cursor/skills-cursor` is never read.
+- The list includes skills the user added by hand, not only ones this tool installed. The tool keeps no record of what it installed.
+- Before removing anything, check every chosen destination: it must be a folder with a `SKILL.md`. If any check fails, remove nothing and report which agent failed.
+- Reject a name that is not valid before touching the disk, so a value such as `..` can never point outside the skills folder.
+- Removal is permanent. There is no trash or backup.
+- Cursor also reads the Claude and ChatGPT folders, so removing a skill from one of those also removes it for Cursor. Uninstall prints no note about this.
+- If no agent is found, or no skills are installed, the command says so and removes nothing. No agent found is an error. No skills installed is a normal result with exit code 0.
+
 ## Presentation
 
-[Commander](https://github.com/tj/commander.js) defines the commands and flags. [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) runs the menu, path prompt, checkbox, and confirm. [chalk](https://github.com/chalk/chalk) colors output. [ora](https://github.com/sindresorhus/ora) is the install spinner.
+[Commander](https://github.com/tj/commander.js) defines the commands and flags. [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) runs the menu, path prompt, checkbox, and confirm. [chalk](https://github.com/chalk/chalk) colors output. [ora](https://github.com/sindresorhus/ora) is the spinner for install and uninstall.
 
 Found agents are green, missing agents are dim, and skill paths are cyan. After confirm, one spinner updates per agent, for example `Installing review-pr into Claude...`, then stops with a green line naming the agent and the path. Errors are red and the spinner fails. The spinner starts before the destination checks run, so a conflict shows as a failed spinner followed by the error. Color and the spinner turn off when output is not a terminal (chalk and ora detect this on their own) or when `NO_COLOR` is set. Neither library reads `NO_COLOR`, so `src/colors.ts` and `src/progress.ts` handle it: with `NO_COLOR` set, output is plain lines with no animation. Ctrl+C in a prompt exits quietly with code 130.
 
@@ -73,7 +91,7 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `tsconfig.json` sets `module: nodenext`, `rewriteRelativeImportExtensions`, `erasableSyntaxOnly`, and `verbatimModuleSyntax`.
 - Relative imports use the `.ts` extension, and the code does not use `enum` or other syntax that cannot be erased.
 
-- `package.json` — bin `ai-toolbox`, scripts `build`, `typecheck`, and `test`
+- `package.json` — bin `ai-tools`, scripts `build`, `typecheck`, and `test`
 - `src/cli.ts` — wires the real scan, prompts, spinner, colors, and output into the program. It has no test of its own; it is checked by running the built tool.
 - `src/program.ts` — Commander commands and flags
 - `src/run-cli.ts` — runs the program and turns errors into messages and exit codes
@@ -88,7 +106,10 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/agents/scan.ts` — the scan of home, `PATH`, and Applications
 - `src/skills/skill.ts` — read and validate `SKILL.md`
 - `src/skills/install.ts` — check destinations, copy, and roll back
+- `src/skills/list.ts` — find the valid skills installed in each agent's skills folder, grouped by name
+- `src/skills/uninstall.ts` — check every destination, then remove the skill folders
+- `src/uninstall-command.ts` — the uninstall flow: list, choose, confirm, remove, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/**/*.test.ts` — one test file beside each module above that has tests, using a temporary home directory
 - `src/test-support.ts` — shared test helpers, excluded from the build
 
-Usage is in `ai-toolbox --help`.
+Usage is in `ai-tools --help`.

@@ -1,12 +1,12 @@
-# ai-toolbox
+# ai-tools
 
-A command-line tool that finds the AI agents on your computer and installs a skill into the ones you pick.
+A command-line tool that finds the AI agents on your computer and installs a skill into the ones you pick, and removes it again.
 
-**For now, the tool does one thing: install a skill from a folder on your computer.** Plugins, MCP (Model Context Protocol) servers, deleting skills, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
+**For now, the tool does two things: install a skill from a folder on your computer, and remove an installed skill.** Plugins, MCP (Model Context Protocol) servers, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
 
 ## Supported agents
 
-The tool looks for each agent by its config folder in your home folder, a command on your `PATH`, or an app in `/Applications` or `~/Applications`. It only installs into agents it finds.
+The tool looks for each agent by its config folder in your home folder, a command on your `PATH`, or an app in `/Applications` or `~/Applications`. It only installs into, or removes from, agents it finds.
 
 | Agent   | Id        | Skills folder              |
 | ------- | --------- | -------------------------- |
@@ -27,7 +27,7 @@ npm install
 npm run build
 ```
 
-The package defines a command named `ai-toolbox`. The examples below use `node dist/cli.js`, which runs the same program.
+The package defines a command named `ai-tools`. The examples below use `node dist/cli.js`, which runs the same program.
 
 ## Use it
 
@@ -67,6 +67,20 @@ Use the ids from the table above with `--agent`. You can't use `--agent` and `--
 
 If the command isn't running in a terminal (for example in a script), it never asks questions. It stops with an error that says what you need to pass: the skill folder, `--agent` or `--all`, or `--yes`.
 
+## Remove a skill
+
+```sh
+node dist/cli.js uninstall
+```
+
+The tool asks three questions:
+
+1. Which skill to remove. The list shows every skill found in your agents' skills folders, including ones you added by hand.
+2. Which agents to remove it from. Only agents that have the skill are listed, and all are ticked.
+3. Whether you are sure. The default answer is No.
+
+There are no flags yet, so this command needs a terminal. In a script it stops with an error and removes nothing.
+
 ## What counts as a skill
 
 A skill is a folder with a `SKILL.md` file at the top. `SKILL.md` starts with a short header:
@@ -88,7 +102,8 @@ The whole folder is copied, except any `.git` folder. The original is not moved 
 - Nothing is overwritten unless you pass `--force`, and `--force` replaces only the copy of this skill in each agent you chose. Your other skills are not touched.
 - If a copy fails part-way, the tool deletes the copies it created earlier in the same run. A copy that `--force` already replaced is not restored.
 - The tool refuses to install a skill onto itself.
-- Cursor also reads the Claude and ChatGPT folders. If Cursor is installed and you didn't choose it, installing into Claude or ChatGPT prints a note that Cursor will see the skill too.
+- A removed skill can't be recovered, because the tool has no trash or backup. It only removes a folder that has a `SKILL.md`, and it checks every chosen agent before it removes from any.
+- Cursor also reads the Claude and ChatGPT folders. If Cursor is installed and you didn't choose it, installing into Claude or ChatGPT prints a note that Cursor will see the skill too. Removing a skill from Claude or ChatGPT also removes it for Cursor, and the tool does not print a note about that.
 
 ## Output
 

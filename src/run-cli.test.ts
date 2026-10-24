@@ -19,6 +19,7 @@ function makeProgram(installError?: Error): Command {
       }
     },
     agents: async () => {},
+    uninstall: async () => {},
     menu: async () => {},
   };
 
