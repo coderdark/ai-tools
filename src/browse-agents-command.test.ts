@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Chalk } from "chalk";
 import { AGENTS, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
+import type { AgentSummary } from "./agents/summary.ts";
 import {
   runBrowseAgents,
   type BrowseAgentsDeps,
@@ -34,7 +35,7 @@ async function setup(t: TestContext, installed: Partial<Record<AgentId, string[]
 
 interface Recorded {
   output: string[];
-  listsShown: AgentId[][];
+  listsShown: [AgentId, number][][];
 }
 
 /** Each entry of `picks` is the agent the user chooses on one pass; `undefined` is Esc. */
@@ -45,12 +46,12 @@ function makeDeps(
   const recorded: Recorded = { output: [], listsShown: [] };
   const remaining = [...picks];
   const prompts: BrowseAgentsPrompts = {
-    async agent(found: ScanResult[]) {
-      recorded.listsShown.push(found.map(({ agent }) => agent.id));
+    async agent(summaries: AgentSummary[]) {
+      recorded.listsShown.push(summaries.map(({ agent, skillCount }) => [agent.id, skillCount]));
 
       const pick = remaining.shift();
 
-      return found.find(({ agent }) => agent.id === pick);
+      return summaries.find(({ agent }) => agent.id === pick);
     },
   };
   const deps: BrowseAgentsDeps = {
@@ -64,16 +65,28 @@ function makeDeps(
 }
 
 function withoutDates(lines: string[]): string[] {
-  return lines.map((line) => line.replace(/\d{4}-\d{2}-\d{2}/, "<date>"));
+  return lines.map((line) => line.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}[+-]\d{2}:\d{2}/, "<date>"));
 }
 
-test("runBrowseAgents offers only the agents that were found", async (t) => {
-  const results = await setup(t, { claude: [], cursor: [] });
+test("runBrowseAgents offers only the agents that were found, with how many skills each has", async (t) => {
+  const results = await setup(t, { claude: ["review-pr", "alpha"], cursor: ["review-pr"], grok: [] });
+  const missing = results.find(({ agent }) => agent.id === "gemini");
+
+  assert.ok(missing);
+
+  await writeFiles(join(missing.skillsDir, "hidden"), { "SKILL.md": SKILL_MD });
+
   const { deps, recorded } = makeDeps(results, [undefined]);
 
   await runBrowseAgents(deps);
 
-  assert.deepEqual(recorded.listsShown, [["cursor", "claude"]]);
+  assert.deepEqual(recorded.listsShown, [
+    [
+      ["cursor", 1],
+      ["claude", 2],
+      ["grok", 0],
+    ],
+  ]);
 });
 
 test("runBrowseAgents prints nothing when the user leaves without choosing", async (t) => {

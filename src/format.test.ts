@@ -4,6 +4,7 @@ import { Chalk } from "chalk";
 import { AGENTS, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
 import {
+  formatAgentChoices,
   formatAgentDetails,
   formatAgentList,
   formatInstalledIn,
@@ -45,8 +46,10 @@ test("formatAgentList colors found agents green with a cyan path, and dims missi
   assert.equal(missing, colored.dim("missing  Claude   /home/.claude/skills"));
 });
 
-const MAY_9 = new Date(2026, 4, 9, 12);
-const OCT_24 = new Date(2026, 9, 24, 12);
+process.env.TZ = "America/Chicago";
+
+const MAY_9 = new Date(2026, 4, 9, 9, 5);
+const OCT_24 = new Date(2026, 9, 24, 17, 45);
 
 function skillsOn(
   entries: Record<string, AgentId[]>,
@@ -85,8 +88,8 @@ test("formatSkillDetails prints the skill name, then each agent with the skill's
   assert.ok(skill);
   assert.deepEqual(formatSkillDetails(skill, plain), [
     "review-pr",
-    "  Cursor  2026-05-09  /home/.cursor/skills/review-pr",
-    "  Claude  2026-05-09  /home/.claude/skills/review-pr",
+    "  Cursor  2026-05-09T09:05-05:00  /home/.cursor/skills/review-pr",
+    "  Claude  2026-05-09T09:05-05:00  /home/.claude/skills/review-pr",
   ]);
 });
 
@@ -96,8 +99,8 @@ test("formatSkillDetails lines up the dates and folders, dims the date and color
   assert.ok(skill);
   assert.deepEqual(formatSkillDetails(skill, colored), [
     "alpha",
-    `  ChatGPT  ${colored.dim("2026-05-09")}  ${colored.cyan("/home/.chatgpt/skills/alpha")}`,
-    `  Claude   ${colored.dim("2026-05-09")}  ${colored.cyan("/home/.claude/skills/alpha")}`,
+    `  ChatGPT  ${colored.dim("2026-05-09T09:05-05:00")}  ${colored.cyan("/home/.chatgpt/skills/alpha")}`,
+    `  Claude   ${colored.dim("2026-05-09T09:05-05:00")}  ${colored.cyan("/home/.claude/skills/alpha")}`,
   ]);
 });
 
@@ -107,8 +110,8 @@ test("formatSkillDetails shows each agent's own date", () => {
   assert.ok(skill);
   assert.deepEqual(formatSkillDetails(skill, plain), [
     "alpha",
-    "  Cursor  2026-10-24  /home/.cursor/skills/alpha",
-    "  Claude  2026-05-09  /home/.claude/skills/alpha",
+    "  Cursor  2026-10-24T17:45-05:00  /home/.cursor/skills/alpha",
+    "  Claude  2026-05-09T09:05-05:00  /home/.claude/skills/alpha",
   ]);
 });
 
@@ -116,14 +119,14 @@ test("formatInstalledIn names the agent and the date", () => {
   const [skill] = skillsOn({ alpha: ["claude"] });
 
   assert.ok(skill);
-  assert.equal(formatInstalledIn(skill), "Installed in Claude on 2026-05-09");
+  assert.equal(formatInstalledIn(skill), "Installed in Claude on 2026-05-09T09:05-05:00");
 });
 
 test("formatInstalledIn gives the date once when every agent has the same one", () => {
   const [skill] = skillsOn({ alpha: ["cursor", "claude"] });
 
   assert.ok(skill);
-  assert.equal(formatInstalledIn(skill), "Installed in Cursor, Claude on 2026-05-09");
+  assert.equal(formatInstalledIn(skill), "Installed in Cursor, Claude on 2026-05-09T09:05-05:00");
 });
 
 test("formatInstalledIn groups the agents that share a date when the dates differ", () => {
@@ -135,7 +138,7 @@ test("formatInstalledIn groups the agents that share a date when the dates diffe
   assert.ok(skill);
   assert.equal(
     formatInstalledIn(skill),
-    "Installed in Cursor, Claude on 2026-10-24; ChatGPT on 2026-05-09",
+    "Installed in Cursor, Claude on 2026-10-24T17:45-05:00; ChatGPT on 2026-05-09T09:05-05:00",
   );
 });
 
@@ -152,12 +155,12 @@ test("formatAgentDetails prints the skills folder, then the agent's skills with 
 
   assert.deepEqual(formatAgentDetails(targetOf("claude"), skills, plain), [
     "Claude  /home/.claude/skills",
-    "  alpha      2026-05-09",
-    "  review-pr  2026-05-09",
+    "  alpha      2026-05-09T09:05-05:00",
+    "  review-pr  2026-05-09T09:05-05:00",
   ]);
   assert.deepEqual(formatAgentDetails(targetOf("cursor"), skills, plain), [
     "Cursor  /home/.cursor/skills",
-    "  review-pr  2026-10-24",
+    "  review-pr  2026-10-24T17:45-05:00",
   ]);
 });
 
@@ -173,10 +176,20 @@ test("formatAgentDetails colors the folder cyan and dims the dates and the empty
 
   assert.deepEqual(formatAgentDetails(targetOf("claude"), skills, colored), [
     `Claude  ${colored.cyan("/home/.claude/skills")}`,
-    `  alpha  ${colored.dim("2026-05-09")}`,
+    `  alpha  ${colored.dim("2026-05-09T09:05-05:00")}`,
   ]);
   assert.deepEqual(formatAgentDetails(targetOf("grok"), [], colored), [
     `Grok  ${colored.cyan("/home/.grok/skills")}`,
     `  ${colored.dim("No skills installed")}`,
   ]);
+});
+
+test("formatAgentChoices lines up the agent names and counts the skills, with a singular for one", () => {
+  const choices = formatAgentChoices([
+    { ...targetOf("cursor"), skillCount: 1 },
+    { ...targetOf("claude"), skillCount: 8 },
+    { ...targetOf("chatgpt"), skillCount: 0 },
+  ]);
+
+  assert.deepEqual(choices, ["Cursor   1 skill", "Claude   8 skills", "ChatGPT  0 skills"]);
 });

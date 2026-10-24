@@ -1,14 +1,10 @@
 import { join } from "node:path";
 import chalk, { type ChalkInstance } from "chalk";
 import type { ScanResult } from "./agents/scan.ts";
+import type { AgentSummary } from "./agents/summary.ts";
+import { formatDateTime } from "./date-time.ts";
 import type { InstallTarget } from "./skills/install.ts";
 import type { InstalledSkill } from "./skills/list.ts";
-
-const dateFormat = new Intl.DateTimeFormat("en-CA", { dateStyle: "short" });
-
-function formatDate(date: Date): string {
-  return dateFormat.format(date);
-}
 
 export function formatAgentList(
   results: ScanResult[],
@@ -36,10 +32,20 @@ export function formatSkillDetails(
 
   const folders = targets.map(
     ({ agent, skillsDir, installedAt }) =>
-      `  ${agent.name.padEnd(nameWidth)}  ${colors.dim(formatDate(installedAt))}  ${colors.cyan(join(skillsDir, name))}`,
+      `  ${agent.name.padEnd(nameWidth)}  ${colors.dim(formatDateTime(installedAt))}  ${colors.cyan(join(skillsDir, name))}`,
   );
 
   return [name, ...folders];
+}
+
+export function formatAgentChoices(summaries: AgentSummary[]): string[] {
+  const nameWidth = Math.max(...summaries.map(({ agent }) => agent.name.length));
+
+  return summaries.map(({ agent, skillCount }) => {
+    const noun = skillCount === 1 ? "skill" : "skills";
+
+    return `${agent.name.padEnd(nameWidth)}  ${skillCount} ${noun}`;
+  });
 }
 
 export function formatAgentDetails(
@@ -65,7 +71,7 @@ export function formatAgentDetails(
     header,
     ...rows.map(
       ({ name, installedAt }) =>
-        `  ${name.padEnd(nameWidth)}  ${colors.dim(formatDate(installedAt))}`,
+        `  ${name.padEnd(nameWidth)}  ${colors.dim(formatDateTime(installedAt))}`,
     ),
   ];
 }
@@ -74,7 +80,7 @@ export function formatInstalledIn({ targets }: InstalledSkill): string {
   const agentsByDate = new Map<string, string[]>();
 
   for (const { agent, installedAt } of targets) {
-    const date = formatDate(installedAt);
+    const date = formatDateTime(installedAt);
 
     agentsByDate.set(date, [...(agentsByDate.get(date) ?? []), agent.name]);
   }

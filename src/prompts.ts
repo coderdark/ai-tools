@@ -6,7 +6,7 @@ import { buildAgentChoices, toSelectionRequest, type AgentChoiceValue } from "./
 import type { BrowseAgentsPrompts } from "./browse-agents-command.ts";
 import type { BrowseSkillsPrompts } from "./browse-skills-command.ts";
 import { runUntilEscape } from "./escape.ts";
-import { formatInstalledIn } from "./format.ts";
+import { formatAgentChoices, formatInstalledIn } from "./format.ts";
 import type { InstallPrompts } from "./install-command.ts";
 import type { MenuEntry, MenuRequest } from "./menu.ts";
 import { readSkill } from "./skills/skill.ts";
@@ -135,12 +135,14 @@ export const terminalBrowsePrompts: BrowseSkillsPrompts = {
 };
 
 export const terminalBrowseAgentsPrompts: BrowseAgentsPrompts = {
-  async agent(found) {
+  async agent(summaries) {
+    const labels = formatAgentChoices(summaries);
+
     const index = await selectWithEscape<number>(
       {
         message: "Which agent do you want to look at?",
-        choices: found.map(({ agent, skillsDir }, position) => ({
-          name: agent.name,
+        choices: summaries.map(({ skillsDir }, position) => ({
+          name: labels[position] ?? "",
           value: position,
           description: skillsDir,
         })),
@@ -148,7 +150,7 @@ export const terminalBrowseAgentsPrompts: BrowseAgentsPrompts = {
       "exit",
     );
 
-    return index === undefined ? undefined : found[index];
+    return index === undefined ? undefined : summaries[index];
   },
 };
 
