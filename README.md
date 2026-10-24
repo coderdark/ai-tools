@@ -2,7 +2,7 @@
 
 A command-line tool that finds the AI agents on your computer and installs a skill into the ones you pick, and removes it again.
 
-**For now, the tool does two things: install a skill from a folder on your computer, and remove an installed skill.** Plugins, MCP (Model Context Protocol) servers, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
+**For now, the tool does three things: install a skill from a folder on your computer, remove an installed skill, and list the skills that are installed.** Plugins, MCP (Model Context Protocol) servers, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
 
 ## Supported agents
 
@@ -31,17 +31,32 @@ The package defines a command named `ai-tools`. The examples below use `node dis
 
 ## Use it
 
-Run it with no command to get a menu:
+Run it with no command to get a menu. It has two entries: **Skills** (list, install and uninstall) and **Agents** (list). The menu stays open after each action, so you can do several things in one session. Choose **Back** to leave the Skills menu and **Exit** to leave the tool, or press Ctrl+C:
 
 ```sh
 node dist/cli.js
 ```
 
-Show which agents were found:
+The menu needs a terminal. In a script it stops with an error, so use a command such as `skills` there. If an action fails, for example because a skill already exists, the error shows in red and you go back to the menu.
+
+List the agents that were found:
 
 ```sh
 node dist/cli.js agents
 ```
+
+List the skills installed in those agents, with the agents that have each one:
+
+```sh
+node dist/cli.js skills
+```
+
+```text
+alpha      Claude
+review-pr  Cursor, Claude
+```
+
+This list is the same one the remove command shows, including skills you added by hand. It asks no questions, so it works in a script. If no agents are found it stops with an error. If no skills are installed it says so.
 
 Install a skill. Anything you leave out, the tool asks for:
 
@@ -107,7 +122,7 @@ The whole folder is copied, except any `.git` folder. The original is not moved 
 
 ## Output
 
-Colors turn off when the output isn't a terminal, or when `NO_COLOR` is set. With `NO_COLOR` set, the spinner is replaced by plain lines. Press Ctrl+C at any question to quit. The tool exits with 0 on success, 1 on an error and 130 when you quit.
+Colors turn off when the output isn't a terminal, or when `NO_COLOR` is set. With `NO_COLOR` set, the spinner is replaced by plain lines. Press Ctrl+C at any question to quit. The tool exits with 0 on success or when you choose Exit, 1 on an error and 130 when you quit with Ctrl+C.
 
 ## Develop
 

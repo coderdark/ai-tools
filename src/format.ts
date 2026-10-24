@@ -1,5 +1,6 @@
 import chalk, { type ChalkInstance } from "chalk";
 import type { ScanResult } from "./agents/scan.ts";
+import type { InstalledSkill } from "./skills/list.ts";
 
 export function formatAgentList(
   results: ScanResult[],
@@ -16,5 +17,15 @@ export function formatAgentList(
     }
 
     return `${colors.green(status)}  ${name}  ${colors.cyan(skillsDir)}`;
+  });
+}
+
+export function formatSkillList(skills: InstalledSkill[], colors: ChalkInstance = chalk): string[] {
+  const nameWidth = Math.max(...skills.map((skill) => skill.name.length));
+
+  return skills.map(({ name, targets }) => {
+    const agentNames = targets.map(({ agent }) => agent.name).join(", ");
+
+    return `${name.padEnd(nameWidth)}  ${colors.dim(agentNames)}`;
   });
 }

@@ -4,6 +4,8 @@ import { defaultScanEnv, scanAgents } from "./agents/scan.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
+import { runListSkills } from "./list-skills-command.ts";
+import { runMenu, type MenuEntry, type MenuRequest } from "./menu.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
 import { terminalPrompts, terminalUninstallPrompts } from "./prompts.ts";
@@ -43,38 +45,55 @@ function uninstall(): Promise<void> {
   });
 }
 
+function skills(): Promise<void> {
+  return runListSkills({ scan, print, colors });
+}
+
 async function agents(): Promise<void> {
   for (const line of formatAgentList(scan(), colors)) {
     print(line);
   }
 }
 
-async function menu(): Promise<void> {
-  const choice = await select({
-    message: "What would you like to do?",
+const menuEntries: MenuEntry[] = [
+  {
+    name: "Skills",
+    entries: [
+      { name: "List skills", run: skills },
+      { name: "Install a skill", run: () => install({}) },
+      { name: "Uninstall a skill", run: uninstall },
+    ],
+  },
+  { name: "Agents", run: agents },
+];
+
+const LEAVE_MENU = -1;
+
+async function chooseMenuEntry({ title, entries, leaveLabel }: MenuRequest): Promise<MenuEntry | undefined> {
+  const index = await select<number>({
+    message: title,
     choices: [
-      { name: "Install a skill", value: "install" },
-      { name: "Uninstall a skill", value: "uninstall" },
-      { name: "Show agents", value: "agents" },
+      ...entries.map(({ name }, position) => ({ name, value: position })),
+      { name: leaveLabel, value: LEAVE_MENU },
     ],
   });
 
-  if (choice === "install") {
-    await install({});
-
-    return;
-  }
-
-  if (choice === "uninstall") {
-    await uninstall();
-
-    return;
-  }
-
-  await agents();
+  return index === LEAVE_MENU ? undefined : entries[index];
 }
 
-const handlers: ProgramHandlers = { install, agents, uninstall, menu };
+function menu(): Promise<void> {
+  return runMenu({
+    title: "What would you like to do?",
+    entries: menuEntries,
+    choose: chooseMenuEntry,
+    interactive,
+    print,
+    printError: (line) => console.error(line),
+    colors,
+  });
+}
+
+const handlers: ProgramHandlers = { install, agents, uninstall, skills, menu };
 
 process.exitCode = await runCli(buildProgram(handlers), process.argv.slice(2), {
   error: (line) => console.error(line),

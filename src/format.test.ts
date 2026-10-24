@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { Chalk } from "chalk";
 import { AGENTS, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
-import { formatAgentList } from "./format.ts";
+import { formatAgentList, formatSkillList } from "./format.ts";
+import type { InstalledSkill } from "./skills/list.ts";
 
 const plain = new Chalk({ level: 0 });
 const colored = new Chalk({ level: 1 });
@@ -36,4 +37,32 @@ test("formatAgentList colors found agents green with a cyan path, and dims missi
     `${colored.green("found  ")}  Cursor   ${colored.cyan("/home/.cursor/skills")}`,
   );
   assert.equal(missing, colored.dim("missing  Claude   /home/.claude/skills"));
+});
+
+function skillsOn(entries: Record<string, AgentId[]>): InstalledSkill[] {
+  return Object.entries(entries).map(([name, ids]) => ({
+    name,
+    targets: ids.map((id) => {
+      const agent = AGENTS.find((candidate) => candidate.id === id);
+
+      assert.ok(agent, `unknown agent ${id}`);
+
+      return { agent, skillsDir: `/home/.${id}/skills` };
+    }),
+  }));
+}
+
+test("formatSkillList prints one line per skill with the agents that have it", () => {
+  const lines = formatSkillList(
+    skillsOn({ alpha: ["claude"], "review-pr": ["cursor", "claude"] }),
+    plain,
+  );
+
+  assert.deepEqual(lines, ["alpha      Claude", "review-pr  Cursor, Claude"]);
+});
+
+test("formatSkillList dims the agent names", () => {
+  const [line] = formatSkillList(skillsOn({ "review-pr": ["cursor", "claude"] }), colored);
+
+  assert.equal(line, `review-pr  ${colored.dim("Cursor, Claude")}`);
 });

@@ -1,21 +1,13 @@
 import type { ChalkInstance } from "chalk";
 import { CommanderError, type Command } from "commander";
-import { UsageError } from "./install-command.ts";
-import { SelectionError } from "./selection.ts";
-import { InstallError } from "./skills/install.ts";
-import { SkillError } from "./skills/skill.ts";
+import { formatUserError, isUserError } from "./user-error.ts";
 
 export interface CliOutput {
   error(line: string): void;
   colors: ChalkInstance;
 }
 
-const USER_ERRORS = [SkillError, SelectionError, InstallError, UsageError];
 const EXIT_AFTER_CTRL_C = 130;
-
-function isUserError(error: unknown): error is Error {
-  return USER_ERRORS.some((errorClass) => error instanceof errorClass);
-}
 
 function isCancelledPrompt(error: unknown): boolean {
   return error instanceof Error && error.name === "ExitPromptError";
@@ -40,7 +32,7 @@ export async function runCli(
     }
 
     if (isUserError(error)) {
-      printError(colors.red(`Error: ${error.message}`));
+      printError(formatUserError(error, colors));
 
       return 1;
     }

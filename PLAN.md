@@ -24,16 +24,21 @@ On the machine this was planned on, the scan finds Cursor, Claude, and ChatGPT. 
 
 ```mermaid
 flowchart TD
-  start["ai-tools"] --> menu["Install a skill, uninstall a skill, or show agents"]
-  menu --> show["Scan, then print found and missing agents"]
-  menu --> scan["Scan home, PATH, and Applications"]
+  start["ai-tools"] --> menu["Skills, Agents, or Exit"]
+  menu --> show["Agents: scan, then print found and missing agents"]
+  menu --> skillsMenu["Skills: list, install, uninstall, or Back"]
+  skillsMenu --> scan["Install: scan home, PATH, and Applications"]
   scan --> path["Prompt for the skill folder"]
   path --> pick["Checkbox of found agents, plus All"]
   pick --> confirm["Confirm"]
   confirm --> copy["Copy into each chosen skill directory"]
+  copy --> skillsMenu
+  skillsMenu --> menu
+  show --> menu
+  menu --> done["Exit"]
 ```
 
-`ai-tools` with no command offers **Install a skill**, **Uninstall a skill** or **Show agents**, and scans once one is chosen. Show agents prints the scan and stops. `ai-tools agents` prints that same list with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
+`ai-tools` with no command opens a menu with **Skills**, **Agents** and **Exit**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** prints the agent list. Each action scans when it is chosen. After an action ends, the menu it was chosen from is shown again, so the user stays in **Skills** until they pick **Back**. The user leaves with **Exit** (exit code 0) or Ctrl+C (exit code 130). **Agents** prints the scan, and `ai-tools agents` prints that same list with no menu. **List skills** prints the installed skills, and `ai-tools skills` prints that same list with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
 
 Install prompts, in order:
 
@@ -74,11 +79,24 @@ Prompts, in order:
 - Cursor also reads the Claude and ChatGPT folders, so removing a skill from one of those also removes it for Cursor. Uninstall prints no note about this.
 - If no agent is found, or no skills are installed, the command says so and removes nothing. No agent found is an error. No skills installed is a normal result with exit code 0.
 
+## List skills
+
+`ai-tools skills` prints one line per skill, sorted by name: the name padded to the widest name, then the agents that have it in dim text, such as `review-pr  Cursor, Claude`. It uses the same list as uninstall, so the validity rules above apply and skills added by hand are included. Only agents the scan found are read. It asks no questions and works without a terminal. If no agent is found it is an error. If no skills are installed it prints "No skills are installed in the agents that were found." and exits with 0. It prints no description, because that would need `SKILL.md` to be read for every skill.
+
 ## Presentation
 
 [Commander](https://github.com/tj/commander.js) defines the commands and flags. [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) runs the menu, path prompt, checkbox, and confirm. [chalk](https://github.com/chalk/chalk) colors output. [ora](https://github.com/sindresorhus/ora) is the spinner for install and uninstall.
 
 Found agents are green, missing agents are dim, and skill paths are cyan. After confirm, one spinner updates per agent, for example `Installing review-pr into Claude...`, then stops with a green line naming the agent and the path. Errors are red and the spinner fails. The spinner starts before the destination checks run, so a conflict shows as a failed spinner followed by the error. Color and the spinner turn off when output is not a terminal (chalk and ora detect this on their own) or when `NO_COLOR` is set. Neither library reads `NO_COLOR`, so `src/colors.ts` and `src/progress.ts` handle it: with `NO_COLOR` set, output is plain lines with no animation. Ctrl+C in a prompt exits quietly with code 130.
+
+## Menu
+
+The menu is a session, so it loops, while the commands are one-shot: each command runs once and exits, so scripts can use it. This is a design choice, not a rule from a published standard. The menu is a tree of entries. An entry is either an action or a group of more entries, and the root shows **Exit** where a group shows **Back**. To add a feature, such as plugins or MCP servers, add an entry to `menuEntries` in `src/cli.ts`; `src/menu.ts` does not change. The loop is in `src/menu.ts`, and every dependency is passed in, so tests use fakes.
+
+- The menu needs a terminal. Without one it exits with an error that points to the commands, and it never draws the menu into a pipe.
+- A user error in an action (a skill that already exists, for example) prints in red and returns to the menu it came from. The messages come from `src/user-error.ts`, which `src/run-cli.ts` also uses.
+- Any other error ends the program with exit code 1.
+- Ctrl+C quits the whole program with code 130, at the menu or in any prompt. It does not go back to the menu.
 
 ## Tech stack and layout
 
@@ -95,19 +113,22 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/cli.ts` — wires the real scan, prompts, spinner, colors, and output into the program. It has no test of its own; it is checked by running the built tool.
 - `src/program.ts` — Commander commands and flags
 - `src/run-cli.ts` — runs the program and turns errors into messages and exit codes
+- `src/user-error.ts` — which errors are user errors, and how they are printed. Used by `run-cli.ts` and `menu.ts`.
+- `src/menu.ts` — the menu tree and loop: ask, open a group or run an action, show a user error and ask again, until Exit or Back
 - `src/install-command.ts` — the install flow: choose, confirm, install, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/selection.ts` — turns `--agent` and `--all` into install targets
 - `src/agent-choices.ts` — the checkbox rows, with **All** first, and the selection they produce
 - `src/prompts.ts` — the real `@inquirer/prompts` prompts. A thin wrapper with no test of its own; it is checked by running the built tool.
 - `src/progress.ts` — the `ora` spinner, plain when `NO_COLOR` is set
 - `src/colors.ts` — chalk, off when `NO_COLOR` is set
-- `src/format.ts` — the agent list lines
+- `src/format.ts` — the agent list lines and the skill list lines
 - `src/agents/registry.ts` — the five agents and their detection signals and skill paths
 - `src/agents/scan.ts` — the scan of home, `PATH`, and Applications
 - `src/skills/skill.ts` — read and validate `SKILL.md`
 - `src/skills/install.ts` — check destinations, copy, and roll back
 - `src/skills/list.ts` — find the valid skills installed in each agent's skills folder, grouped by name
 - `src/skills/uninstall.ts` — check every destination, then remove the skill folders
+- `src/list-skills-command.ts` — the list skills flow: scan, list, print. Output is passed in, so tests use fakes.
 - `src/uninstall-command.ts` — the uninstall flow: list, choose, confirm, remove, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/**/*.test.ts` — one test file beside each module above that has tests, using a temporary home directory
 - `src/test-support.ts` — shared test helpers, excluded from the build

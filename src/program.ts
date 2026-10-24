@@ -5,6 +5,7 @@ export interface ProgramHandlers {
   install(options: InstallCommandOptions): Promise<void>;
   agents(): Promise<void>;
   uninstall(): Promise<void>;
+  skills(): Promise<void>;
   menu(): Promise<void>;
 }
 
@@ -27,7 +28,7 @@ export function buildProgram(handlers: ProgramHandlers): Command {
 
   program
     .command("agents")
-    .description("Show which AI agents were found on this computer.")
+    .description("List the AI agents found on this computer.")
     .action(handlers.agents);
 
   program
@@ -47,6 +48,11 @@ export function buildProgram(handlers: ProgramHandlers): Command {
         yes: Boolean(flags.yes),
       }),
     );
+
+  program
+    .command("skills")
+    .description("List the skills installed in the AI agents on this computer.")
+    .action(handlers.skills);
 
   program
     .command("uninstall")
