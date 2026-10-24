@@ -2,19 +2,19 @@
 
 A command-line tool that finds the AI agents on your computer and installs a skill into the ones you pick.
 
-**Phase 1 does one thing: install a skill from a folder on your computer.** Plugins, MCP servers, deleting skills, project-level skills and downloading from git are not built yet.
+**For now, the tool does one thing: install a skill from a folder on your computer.** Plugins, MCP (Model Context Protocol) servers, deleting skills, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
 
 ## Supported agents
 
 The tool looks for each agent by its config folder in your home folder, a command on your `PATH`, or an app in `/Applications` or `~/Applications`. It only installs into agents it finds.
 
-| Agent   | Skills folder              |
-| ------- | -------------------------- |
-| Cursor  | `~/.cursor/skills`         |
-| Claude  | `~/.claude/skills`         |
-| ChatGPT | `~/.codex/skills`          |
-| Gemini  | `~/.gemini/skills`         |
-| Grok    | `~/.grok/skills`           |
+| Agent   | Id        | Skills folder              |
+| ------- | --------- | -------------------------- |
+| Cursor  | `cursor`  | `~/.cursor/skills`         |
+| Claude  | `claude`  | `~/.claude/skills`         |
+| ChatGPT | `chatgpt` | `~/.codex/skills`          |
+| Gemini  | `gemini`  | `~/.gemini/skills`         |
+| Grok    | `grok`    | `~/.grok/skills`           |
 
 `~/.agents/skills` is not used, because several agents read it and a copy there would not belong to one agent.
 
@@ -63,9 +63,9 @@ node dist/cli.js install ./my-skill --all --yes
 | `--yes`          | Skip the confirmation question.                        |
 | `--force`        | Replace a copy of the skill that is already installed. |
 
-Agent ids are `cursor`, `claude`, `chatgpt`, `gemini` and `grok`. You can't use `--agent` and `--all` together.
+Use the ids from the table above with `--agent`. You can't use `--agent` and `--all` together.
 
-If the command isn't running in a terminal (for example in a script), it never asks questions. It stops with an error that names the flag you need to pass.
+If the command isn't running in a terminal (for example in a script), it never asks questions. It stops with an error that says what you need to pass: the skill folder, `--agent` or `--all`, or `--yes`.
 
 ## What counts as a skill
 
@@ -85,10 +85,10 @@ The whole folder is copied, except any `.git` folder. The original is not moved 
 
 ## Safety
 
-- Nothing is overwritten unless you pass `--force`, and `--force` only replaces that one copy.
-- If a copy fails part-way, the new copies made so far are removed. A copy replaced with `--force` is not restored.
+- Nothing is overwritten unless you pass `--force`, and `--force` replaces only the copy of this skill in each agent you chose. Your other skills are not touched.
+- If a copy fails part-way, the tool deletes the copies it created earlier in the same run. A copy that `--force` already replaced is not restored.
 - The tool refuses to install a skill onto itself.
-- Cursor also reads the Claude and ChatGPT folders. After you install into one of those, the tool tells you Cursor will see the skill too.
+- Cursor also reads the Claude and ChatGPT folders. If Cursor is installed and you didn't choose it, installing into Claude or ChatGPT prints a note that Cursor will see the skill too.
 
 ## Output
 
