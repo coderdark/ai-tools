@@ -168,6 +168,12 @@ export async function runInstall(
   const agentCount = `${outcomes.length} ${outcomes.length === 1 ? "agent" : "agents"}`;
 
   progress.succeed(`Installed ${skill.name} into ${agentCount}`);
-  formatOutcomes(outcomes, colors).forEach(print);
-  formatCursorNotes(skill, targets, found, colors).forEach(print);
+  const lines = [
+    ...formatOutcomes(outcomes, colors),
+    ...formatCursorNotes(skill, targets, found, colors),
+  ];
+
+  for (const line of lines) {
+    print(line);
+  }
 }

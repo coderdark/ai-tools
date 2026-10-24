@@ -161,6 +161,20 @@ test("runInstall fails before asking anything when no agents are found on the co
   assert.deepEqual(log.prompts, []);
 });
 
+test("runInstall calls print with the line only, so console.log can be used as print", async (t) => {
+  const { skillDir, results } = await setup(t, ["claude", "cursor"]);
+  const { deps } = makeDeps(results);
+  const argumentCounts: number[] = [];
+
+  deps.print = (...printed: unknown[]) => {
+    argumentCounts.push(printed.length);
+  };
+
+  await runInstall({ skillDir, agents: ["claude"], yes: true }, deps);
+
+  assert.deepEqual(argumentCounts, [1, 1]);
+});
+
 test("runInstall says \"1 agent\", not \"1 agents\", when it installs into a single agent", async (t) => {
   const { skillDir, results } = await setup(t, ["claude"]);
   const { deps, log } = makeDeps(results);
