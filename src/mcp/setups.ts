@@ -36,6 +36,8 @@ export interface McpCliSetup extends McpSetupFacts {
   kind: "cli";
   command: string;
   add(server: McpServer): string[];
+  /** Removes the server from the user-level settings, never from a project's. */
+  remove(name: string): string[];
   /** A reason this agent cannot take the server, or undefined when it can. */
   unsupported?(server: McpServer): string | undefined;
 }
@@ -111,7 +113,7 @@ const claude: McpCliSetup = {
   kind: "cli",
   command: binaryOf("claude"),
   source: "https://code.claude.com/docs/en/mcp",
-  verified: "docs, `claude mcp add --help` and a real run",
+  verified: "docs, `claude mcp add --help`, `claude mcp remove --help` and real runs",
   savedIn: claudeFile,
   locateExisting(output, home, env) {
     const scope = /^\s*Scope:\s*(.+)$/m.exec(stripVTControlCharacters(output))?.[1]?.trim();
@@ -137,13 +139,14 @@ const claude: McpCliSetup = {
       "--", transport.command, ...transport.args,
     ];
   },
+  remove: (name) => ["mcp", "remove", "--scope", "user", name],
 };
 
 const chatgpt: McpCliSetup = {
   kind: "cli",
   command: binaryOf("chatgpt"),
   source: "https://developers.openai.com/codex/mcp",
-  verified: "docs, `codex mcp add --help` and a real run",
+  verified: "docs, `codex mcp add --help`, `codex mcp remove --help` and real runs",
   savedIn: (home, env) => join(env.CODEX_HOME || join(home, ".codex"), "config.toml"),
   check: {
     command: binaryOf("chatgpt"),
@@ -164,6 +167,7 @@ const chatgpt: McpCliSetup = {
 
     return ["mcp", "add", name, ...envFlags("--env", transport.env), "--", transport.command, ...transport.args];
   },
+  remove: (name) => ["mcp", "remove", name],
 };
 
 const gemini: McpCliSetup = {
@@ -185,6 +189,7 @@ const gemini: McpCliSetup = {
       name, transport.command, ...argsForGemini(transport.args),
     ];
   },
+  remove: (name) => ["mcp", "remove", "--scope", "user", name],
 };
 
 const grok: McpCliSetup = {
@@ -206,6 +211,7 @@ const grok: McpCliSetup = {
       "--", transport.command, ...transport.args,
     ];
   },
+  remove: (name) => ["mcp", "remove", "--scope", "user", name],
 };
 
 const CURSOR_FILE = [".cursor", "mcp.json"];

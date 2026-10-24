@@ -127,3 +127,25 @@ export async function addToJsonConfig(path: string, key: string, name: string, e
   await mkdir(dirname(target), { recursive: true });
   await writeThroughTemporaryFile(target, `${JSON.stringify(next, null, 2)}\n`, existingMode);
 }
+
+/**
+ * Removes one server from the object under `key`, keeping everything else in the file.
+ * Returns false, and writes nothing, when the file or the server is not there.
+ * Refuses, and leaves the file as it was, when the file cannot be read as JSON.
+ */
+export async function removeFromJsonConfig(path: string, key: string, name: string): Promise<boolean> {
+  const target = await realpath(path).catch(() => path);
+  const config = await readConfig(target);
+  const servers = readServers(config, key, target);
+
+  if (!Object.hasOwn(servers, name)) {
+    return false;
+  }
+
+  const { [name]: _removed, ...remaining } = servers;
+  const existingMode = await stat(target).then((stats) => stats.mode & 0o777);
+
+  await writeThroughTemporaryFile(target, `${JSON.stringify({ ...config, [key]: remaining }, null, 2)}\n`, existingMode);
+
+  return true;
+}

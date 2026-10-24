@@ -23,7 +23,7 @@ export interface UninstallCommandDeps {
   colors?: ChalkInstance;
 }
 
-const CANCELLED_MESSAGE = "Cancelled. Nothing was removed.";
+export const CANCELLED_MESSAGE = "Cancelled. Nothing was removed.";
 
 async function chooseSkill(
   installed: InstalledSkill[],

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, lstat, mkdir, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTempRoot } from "../test-support.ts";
-import { addToJsonConfig, checkJsonConfig, McpConfigError } from "./json-config.ts";
+import { addToJsonConfig, checkJsonConfig, McpConfigError, removeFromJsonConfig } from "./json-config.ts";
 
 const ENTRY = { type: "stdio", command: "npx", args: ["-y", "pkg"] };
 
@@ -166,4 +166,63 @@ test("checkJsonConfig says why a file cannot be used, and changes nothing", asyn
   assert.equal(result.state, "unreadable");
   assert.match(String("message" in result ? result.message : ""), /not valid JSON/);
   assert.equal(await readFile(path, "utf8"), "not json");
+});
+
+test("removeFromJsonConfig removes only that server and keeps everything else", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, JSON.stringify({ theme: "dark", mcpServers: { fs: ENTRY, other: { url: "https://x.test" } } }));
+
+  assert.equal(await removeFromJsonConfig(path, "mcpServers", "fs"), true);
+  assert.deepEqual(await readJson(path), { theme: "dark", mcpServers: { other: { url: "https://x.test" } } });
+});
+
+test("removeFromJsonConfig leaves an empty server list when the last server goes", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, JSON.stringify({ mcpServers: { fs: ENTRY } }));
+  await removeFromJsonConfig(path, "mcpServers", "fs");
+
+  assert.deepEqual(await readJson(path), { mcpServers: {} });
+});
+
+test("removeFromJsonConfig says false, and creates nothing, when the file or the name is missing", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const missing = join(root, "missing.json");
+  const path = join(root, "mcp.json");
+  const text = JSON.stringify({ mcpServers: { other: {} } });
+
+  await writeFile(path, text);
+
+  assert.equal(await removeFromJsonConfig(missing, "mcpServers", "fs"), false);
+  assert.deepEqual(await readdir(root), ["mcp.json"]);
+  assert.equal(await removeFromJsonConfig(path, "mcpServers", "fs"), false);
+  assert.equal(await readFile(path, "utf8"), text);
+});
+
+test("removeFromJsonConfig refuses a file that is not JSON, and leaves it unchanged", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const path = join(root, "mcp.json");
+
+  await writeFile(path, "// comment\n{}");
+
+  await assert.rejects(removeFromJsonConfig(path, "mcpServers", "fs"), McpConfigError);
+  assert.equal(await readFile(path, "utf8"), "// comment\n{}");
+});
+
+test("removeFromJsonConfig keeps the file's permissions and writes through a symlink", async (t) => {
+  const root = await makeTempRoot(t, "ai-toolbox-json-");
+  const real = join(root, "real.json");
+  const link = join(root, "link.json");
+
+  await writeFile(real, JSON.stringify({ mcpServers: { fs: ENTRY } }));
+  await chmod(real, 0o640);
+  await symlink(real, link);
+  await removeFromJsonConfig(link, "mcpServers", "fs");
+
+  assert.equal((await lstat(link)).isSymbolicLink(), true);
+  assert.deepEqual(await readJson(real), { mcpServers: {} });
+  assert.equal((await stat(real)).mode & 0o777, 0o640);
 });

@@ -7,8 +7,10 @@ import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
 import { runListSkills } from "./list-skills-command.ts";
 import { runMcpInstall, type McpInstallOptions } from "./mcp-install-command.ts";
+import { runMcpUninstall, type McpUninstallOptions } from "./mcp-uninstall-command.ts";
 import { installMcpServer } from "./mcp/install.ts";
 import { runCommand } from "./mcp/run-command.ts";
+import { findMcpServer, uninstallMcpServer } from "./mcp/uninstall.ts";
 import { runMenu, type MenuEntry } from "./menu.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
@@ -17,6 +19,7 @@ import {
   terminalBrowseAgentsPrompts,
   terminalBrowsePrompts,
   terminalMcpInstallPrompts,
+  terminalMcpUninstallPrompts,
   terminalPrompts,
   terminalUninstallPrompts,
 } from "./prompts.ts";
@@ -66,6 +69,22 @@ function mcpInstall(options: McpInstallOptions): Promise<void> {
   });
 }
 
+function mcpUninstall(options: McpUninstallOptions): Promise<void> {
+  const { home, pathDirs } = defaultScanEnv();
+  const checkDeps = { home, env: process.env, isOnPath: (name: string) => isOnPath(name, pathDirs), runCommand };
+
+  return runMcpUninstall(options, {
+    scan,
+    prompts: terminalMcpUninstallPrompts,
+    progress: createProgress(),
+    print,
+    interactive,
+    colors,
+    find: (name, agents) => findMcpServer(name, agents, checkDeps),
+    uninstall: (name, found, onProgress) => uninstallMcpServer(name, found, { ...checkDeps, onProgress }),
+  });
+}
+
 function uninstall(): Promise<void> {
   return runUninstall({
     scan,
@@ -105,7 +124,13 @@ const menuEntries: MenuEntry[] = [
       { name: "Uninstall a skill", run: uninstall },
     ],
   },
-  { name: "MCP servers", entries: [{ name: "Install an MCP server", run: () => mcpInstall({}) }] },
+  {
+    name: "MCP servers",
+    entries: [
+      { name: "Install an MCP server", run: () => mcpInstall({}) },
+      { name: "Uninstall an MCP server", run: () => mcpUninstall({}) },
+    ],
+  },
 ];
 
 function menu(): Promise<void> {
@@ -117,7 +142,7 @@ function menu(): Promise<void> {
   });
 }
 
-const handlers: ProgramHandlers = { install, mcpInstall, agents, uninstall, skills, menu };
+const handlers: ProgramHandlers = { install, mcpInstall, mcpUninstall, agents, uninstall, skills, menu };
 
 process.exitCode = await runCli(buildProgram(handlers), process.argv.slice(2), {
   error: (line) => console.error(line),

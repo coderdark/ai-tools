@@ -19,6 +19,7 @@ function makeProgram(installError?: Error): Command {
       }
     },
     mcpInstall: async () => {},
+    mcpUninstall: async () => {},
     agents: async () => {},
     uninstall: async () => {},
     skills: async () => {},

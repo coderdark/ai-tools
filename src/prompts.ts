@@ -10,6 +10,7 @@ import { runUntilEscape } from "./escape.ts";
 import { formatAgentChoices, formatInstalledIn } from "./format.ts";
 import type { InstallPrompts } from "./install-command.ts";
 import type { McpInstallPrompts, McpKind } from "./mcp-install-command.ts";
+import type { McpUninstallPrompts } from "./mcp-uninstall-command.ts";
 import {
   checkCommandLine,
   checkEnvEntry,
@@ -166,6 +167,28 @@ export const terminalMcpInstallPrompts: McpInstallPrompts = {
 
   confirm(server, agentNames) {
     return askYesNo(`Install MCP server ${server.name} (${describeServer(server)}) into ${agentNames.join(", ")}?`);
+  },
+};
+
+export const terminalMcpUninstallPrompts: McpUninstallPrompts = {
+  name() {
+    return askText("Name of the MCP server to remove", checkServerName);
+  },
+
+  agents(name, candidates) {
+    const places = new Map(
+      candidates.map(({ agent, presence }) => [
+        agent.id,
+        presence.state === "present" ? (presence.place.savedIn ?? presence.place.note) : undefined,
+      ]),
+    );
+    const found = candidates.map(({ agent }) => ({ agent, found: true, skillsDir: "" }));
+
+    return askAgents(`Remove ${name} from which agents?`, found, ({ agent }) => places.get(agent.id));
+  },
+
+  confirm(name, agentNames) {
+    return askYesNo(`Remove MCP server ${name} from ${agentNames.join(", ")}?`);
   },
 };
 

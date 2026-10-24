@@ -177,3 +177,10 @@ test("Cursor entry for a remote server has the url and leaves out empty headers"
   });
   assert.deepEqual(cursor.entry(REMOTE_BARE), { url: "https://mcp.example.com/mcp" });
 });
+
+test("each command line agent removes a server at user scope with its own remove command", () => {
+  assert.deepEqual(cli("claude").remove("fs"), ["mcp", "remove", "--scope", "user", "fs"]);
+  assert.deepEqual(cli("chatgpt").remove("fs"), ["mcp", "remove", "fs"]);
+  assert.deepEqual(cli("gemini").remove("fs"), ["mcp", "remove", "--scope", "user", "fs"]);
+  assert.deepEqual(cli("grok").remove("fs"), ["mcp", "remove", "--scope", "user", "fs"]);
+});

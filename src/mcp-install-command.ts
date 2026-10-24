@@ -55,13 +55,13 @@ export interface McpInstallDeps {
   install(server: McpServer, agents: Agent[], onProgress: (agent: Agent) => void): Promise<McpOutcome[]>;
 }
 
-function assertCanPrompt({ interactive }: McpInstallDeps, instead: string): void {
+export function assertCanPrompt({ interactive }: { interactive: boolean }, instead: string): void {
   if (!interactive) {
     throw new UsageError(`${instead} when not running in a terminal`);
   }
 }
 
-function assertValid(result: true | string, label: string): void {
+export function assertValid(result: true | string, label: string): void {
   if (result !== true) {
     throw new UsageError(`${label}: ${result}`);
   }
@@ -257,11 +257,11 @@ async function isConfirmed(
   );
 }
 
-function countAgents(count: number): string {
+export function countAgents(count: number): string {
   return `${count} ${count === 1 ? "agent" : "agents"}`;
 }
 
-function oneLine(text: string): string {
+export function oneLine(text: string): string {
   return text.replaceAll("\n", " ");
 }
 

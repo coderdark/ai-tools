@@ -1,10 +1,12 @@
 import { Command } from "commander";
 import type { InstallCommandOptions } from "./install-command.ts";
 import type { McpInstallOptions } from "./mcp-install-command.ts";
+import type { McpUninstallOptions } from "./mcp-uninstall-command.ts";
 
 export interface ProgramHandlers {
   install(options: InstallCommandOptions): Promise<void>;
   mcpInstall(options: McpInstallOptions): Promise<void>;
+  mcpUninstall(options: McpUninstallOptions): Promise<void>;
   agents(): Promise<void>;
   uninstall(): Promise<void>;
   skills(): Promise<void>;
@@ -22,6 +24,12 @@ interface McpInstallFlags {
   url?: string;
   env: string[];
   header: string[];
+  agent: string[];
+  all?: boolean;
+  yes?: boolean;
+}
+
+interface McpUninstallFlags {
   agent: string[];
   all?: boolean;
   yes?: boolean;
@@ -86,6 +94,17 @@ export function buildProgram(handlers: ProgramHandlers): Command {
         all: Boolean(flags.all),
         yes: Boolean(flags.yes),
       }),
+    );
+
+  mcp
+    .command("uninstall")
+    .description("Remove an MCP server from one or more agents.")
+    .argument("[name]", "name of the server")
+    .option("--agent <id>", "agent to remove it from (repeat for several)", collect, [])
+    .option("--all", "remove it from every agent that was found")
+    .option("--yes", "skip the confirmation")
+    .action((name: string | undefined, flags: McpUninstallFlags) =>
+      handlers.mcpUninstall({ name, agents: flags.agent, all: Boolean(flags.all), yes: Boolean(flags.yes) }),
     );
 
   program

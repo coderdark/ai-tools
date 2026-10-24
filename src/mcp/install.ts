@@ -1,16 +1,26 @@
 import { join } from "node:path";
-import { stripVTControlCharacters } from "node:util";
 import type { Agent } from "../agents/registry.ts";
-import { addToJsonConfig, checkJsonConfig } from "./json-config.ts";
-import type { CommandResult, CommandRunner } from "./run-command.ts";
+import {
+  commandProblem,
+  errorMessage,
+  findPresence,
+  readCheck,
+  summarizeOutput,
+  type McpCheckDeps,
+  type Presence,
+} from "./check.ts";
+import { addToJsonConfig } from "./json-config.ts";
 import type { McpServer } from "./server.ts";
-import { MCP_SETUPS, type McpCheck, type McpCliSetup, type McpJsonFileSetup, type McpSetup } from "./setups.ts";
+import {
+  MCP_SETUPS,
+  type ExistingPlace,
+  type McpCheck,
+  type McpCliSetup,
+  type McpJsonFileSetup,
+  type McpSetup,
+} from "./setups.ts";
 
-export interface McpInstallDeps {
-  home: string;
-  env: NodeJS.ProcessEnv;
-  isOnPath(name: string): boolean;
-  runCommand: CommandRunner;
+export interface McpInstallDeps extends McpCheckDeps {
   onProgress?(agent: Agent): void;
 }
 
@@ -28,8 +38,6 @@ interface Placed {
 
 export type McpOutcome = { agent: Agent } & McpResult & Placed;
 
-const MAX_DETAIL_LINES = 3;
-
 /** Shorter values are mostly flags such as 1 or true, and hiding them would garble every message. */
 const MIN_SECRET_LENGTH = 4;
 
@@ -37,49 +45,6 @@ function secretsOf({ transport }: McpServer): string[] {
   const values = Object.values(transport.kind === "http" ? transport.headers : transport.env);
 
   return values.filter((value) => value.length >= MIN_SECRET_LENGTH);
-}
-
-function redact(text: string, secrets: string[]): string {
-  return secrets.reduce((safe, secret) => safe.replaceAll(secret, "***"), text);
-}
-
-function summarizeOutput({ exitCode, stdout, stderr }: CommandResult, secrets: string[]): string {
-  const text = redact(stderr.trim() || stdout.trim(), secrets);
-
-  if (!text) {
-    return `exited with code ${exitCode}`;
-  }
-
-  return text.split("\n").slice(0, MAX_DETAIL_LINES).join("\n");
-}
-
-function errorMessage(error: unknown, secrets: string[]): string {
-  return redact(error instanceof Error ? error.message : String(error), secrets);
-}
-
-/** The line of a listing that names the server, matched as a whole name. Terminal control codes are removed. */
-function findListedLine(listing: string, name: string): string | undefined {
-  const wholeName = new RegExp(`(?<![A-Za-z0-9_-])${name}(?![A-Za-z0-9_-])`);
-
-  return stripVTControlCharacters(listing)
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => wholeName.test(line));
-}
-
-/** What a check command says about a server, or undefined when the agent does not know it. */
-function readCheck(result: CommandResult, check: McpCheck, name: string): { note?: string } | undefined {
-  if (result.exitCode !== 0) {
-    return undefined;
-  }
-
-  if (!check.listsAllServers) {
-    return {};
-  }
-
-  const note = findListedLine(result.stdout, name);
-
-  return note === undefined ? undefined : { note };
 }
 
 function present<T extends object>(fields: T): T {
@@ -90,68 +55,41 @@ function whereAdded(setup: McpSetup, { home, env }: McpInstallDeps): Placed {
   return present({ savedIn: setup.savedIn?.(home, env), scopeNote: setup.scopeNote });
 }
 
-function alreadyInstalled(setup: McpSetup, checkOutput: string, deps: McpInstallDeps): McpResult & Placed {
-  const { home, env } = deps;
-  const located = setup.locateExisting?.(checkOutput, home, env) ?? { savedIn: setup.savedIn?.(home, env) };
-
+function alreadyInstalled(setup: McpSetup, place: ExistingPlace): McpResult & Placed {
   return {
     status: "already-installed",
-    ...present({ note: located.note, savedIn: located.savedIn, scopeNote: setup.scopeNote }),
+    ...present({ note: place.note, savedIn: place.savedIn, scopeNote: setup.scopeNote }),
   };
 }
 
-function skipped(detail: string | undefined): McpResult | undefined {
-  return detail === undefined ? undefined : { status: "skipped", detail };
-}
-
-/** Some agents quietly replace a server that has the same name, so the tool asks first and never replaces. */
-async function findExisting(
-  server: McpServer,
-  setup: McpCliSetup,
-  deps: McpInstallDeps,
-): Promise<(McpResult & Placed) | undefined> {
-  const { check } = setup;
-
-  try {
-    const result = await deps.runCommand(check.command, check.args(server.name));
-
-    return readCheck(result, check, server.name) ? alreadyInstalled(setup, result.stdout, deps) : undefined;
-  } catch (error) {
-    return skipped(errorMessage(error, secretsOf(server)));
+function settledBy(presence: Presence, setup: McpSetup): (McpResult & Placed) | undefined {
+  switch (presence.state) {
+    case "present":
+      return alreadyInstalled(setup, presence.place);
+    case "unknown":
+      return { status: "skipped", detail: presence.reason };
+    case "absent":
+      return undefined;
   }
 }
 
-async function checkCursorFile(
-  server: McpServer,
-  setup: McpJsonFileSetup,
-  deps: McpInstallDeps,
-): Promise<(McpResult & Placed) | undefined> {
-  const found = await checkJsonConfig(join(deps.home, ...setup.path), setup.key, server.name);
-
-  if (found.state === "exists") {
-    return alreadyInstalled(setup, "", deps);
-  }
-
-  return found.state === "unreadable" ? skipped(found.message) : undefined;
-}
-
-/** A result that settles the agent before anything is added: already installed, or it cannot be done. */
+/**
+ * A result that settles the agent before anything is added: already installed, or it cannot be done.
+ * Some agents quietly replace a server that has the same name, so the tool asks first and never replaces.
+ */
 async function checkBeforeAdding(
   server: McpServer,
   agent: Agent,
   deps: McpInstallDeps,
 ): Promise<(McpResult & Placed) | undefined> {
   const setup = MCP_SETUPS[agent.id];
+  const problem = commandProblem(setup, deps) ?? (setup.kind === "cli" ? setup.unsupported?.(server) : undefined);
 
-  if (setup.kind === "json-file") {
-    return checkCursorFile(server, setup, deps);
+  if (problem !== undefined) {
+    return { status: "skipped", detail: problem };
   }
 
-  if (!deps.isOnPath(setup.command)) {
-    return skipped(`${setup.command} was not found on PATH`);
-  }
-
-  return skipped(setup.unsupported?.(server)) ?? findExisting(server, setup, deps);
+  return settledBy(await findPresence(server.name, setup, deps, secretsOf(server)), setup);
 }
 
 function addToCursorFile(server: McpServer, setup: McpJsonFileSetup, deps: McpInstallDeps): Promise<void> {

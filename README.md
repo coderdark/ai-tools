@@ -154,6 +154,37 @@ Things to know:
 - **Values are saved as typed.** Environment variables and headers go into each agent's settings file in plain text, and are passed to the agent's command, so other programs on your computer could see them while it runs. An environment variable or header you type stays visible on the screen. The tool never prints these values itself, and hides any value of four or more characters in the messages it shows. Shorter values, such as `1`, are left as they are so messages stay readable. Each agent expands references such as `${VAR}` with its own syntax, so check the agent's documentation before using one.
 - **The command line has no shell.** Quotes group words, but pipes, redirects and `$VAR` are passed as plain text.
 
+## Uninstall an MCP server
+
+```sh
+node dist/cli.js mcp uninstall [name] [--agent <id>... | --all] [--yes]
+```
+
+Or pick **MCP servers**, then **Uninstall an MCP server**, in the menu. The tool asks:
+
+1. The name of the server to remove. You type it, so the tool never has to list every server your agents know. Claude's own listing runs a health check on each server, which is slow.
+2. Which agents to remove it from. Only agents that have a server with that name are offered, and the list shows where each one has it.
+3. Whether you are sure. Esc cancels at every question.
+
+Each agent removes the server with its own command, so it changes its own file. Cursor has no such command, so the tool removes the entry from `~/.cursor/mcp.json` and keeps everything else in that file.
+
+| Agent   | How the server is removed                     | How it was checked                                     |
+| ------- | --------------------------------------------- | ------------------------------------------------------ |
+| Cursor  | the tool edits `~/.cursor/mcp.json`           | a real file and a real run                             |
+| Claude  | `claude mcp remove --scope user`              | `--help` and a real run                                |
+| ChatGPT | `codex mcp remove`                            | `--help` and a real run                                |
+| Gemini  | `gemini mcp remove --scope user`              | **docs only. Not tested, because Gemini is not installed here.** |
+| Grok    | `grok mcp remove --scope user`                | **docs only. Not tested, because Grok is not installed here.**   |
+
+After removing, the tool asks the agent again, with the same check command that install uses, and reports a failure if the agent still has the server. It prints one line per agent: `uninstalled from <file>`, `not installed`, `failed` or `skipped`. Without a terminal the command never asks questions: pass the name, `--agent` or `--all`, and `--yes`.
+
+Things to know:
+
+- **A server that is not there is not an error.** The agent's line says `not installed`, and the tool exits with code 0. It exits with code 1 only when an agent failed or was skipped.
+- **Only the user-level server is removed.** If Claude says the server is in a project's settings (such as `Local config`), the tool skips Claude, repeats what Claude said, and removes nothing. Gemini and Grok are asked to remove the user-level one only, for the same reason.
+- **Any server with that name is removed, not only the ones this tool added.** The tool compares only the name. You confirm the agents before anything is removed, and there is no undo.
+- **A Cursor file with comments is left alone.** If `~/.cursor/mcp.json` is not valid JSON the tool skips Cursor and does not rewrite the file.
+
 ## What counts as a skill
 
 A skill is a folder with a `SKILL.md` file at the top. `SKILL.md` starts with a short header:
