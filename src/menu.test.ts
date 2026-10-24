@@ -187,3 +187,25 @@ test("runMenu tells the chooser which menu is the top level", async () => {
     ["What would you like to do?: true", "Skills: false"],
   );
 });
+
+test("runMenu shows the welcome once, before the first menu, and not again for a group or after the action", async () => {
+  const { deps, log } = makeDeps(["Skills", "List"], (events) => [
+    { name: "Skills", entries: [action(events, "List")] },
+  ]);
+
+  await runMenu({ ...deps, welcome: () => log.events.push("welcome") });
+
+  assert.deepEqual(log.events, [
+    "welcome",
+    "menu: What would you like to do? [Skills]",
+    "menu: Skills [List]",
+    "run: List",
+  ]);
+});
+
+test("runMenu shows no welcome when it cannot open a menu", async () => {
+  const { deps, log } = makeDeps([], () => []);
+
+  await assert.rejects(runMenu({ ...deps, interactive: false, welcome: () => log.events.push("welcome") }), UsageError);
+  assert.deepEqual(log.events, []);
+});

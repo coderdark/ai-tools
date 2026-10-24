@@ -31,7 +31,7 @@ The package defines a command named `ai-tools`. The examples below use `node dis
 
 ## Use it
 
-Run it with no command to get a menu. It has three entries: **Agents** (list), **Skills** (list, install and uninstall) and **MCP servers** (install). The menu runs one action and then the tool exits, the same as the matching command. Press Esc in any menu, or Ctrl+C, to leave without doing anything. There is no way back to the top menu from the Skills menu: run the tool again to choose something else:
+Run it with no command to get a menu. A small box with the tool's name, version and description is shown first, only when the menu opens in a terminal. It is plain text when `NO_COLOR` is set, and commands such as `agents` never show it. The menu has three entries: **Agents** (list), **Skills** (list, install and uninstall) and **MCP servers** (install). The menu runs one action and then the tool exits, the same as the matching command. Press Esc in any menu, or Ctrl+C, to leave without doing anything. There is no way back to the top menu from the Skills menu: run the tool again to choose something else:
 
 ```sh
 node dist/cli.js

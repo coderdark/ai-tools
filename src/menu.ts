@@ -25,6 +25,8 @@ export interface MenuDeps {
   /** Resolves to the chosen entry, or undefined when the user left the menu with Esc. */
   choose(request: MenuRequest): Promise<MenuEntry | undefined>;
   interactive: boolean;
+  /** Shown once, before the first menu. */
+  welcome?(): void;
 }
 
 function isGroup(entry: MenuEntry): entry is MenuGroup {
@@ -56,6 +58,8 @@ export async function runMenu(deps: MenuDeps): Promise<void> {
   if (!deps.interactive) {
     throw new UsageError("the menu needs a terminal. Run a command instead, such as `skills`");
   }
+
+  deps.welcome?.();
 
   await runLevel(deps.title, deps.entries, true, deps);
 }

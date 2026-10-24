@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { defaultScanEnv, isOnPath, scanAgents } from "./agents/scan.ts";
+import { readAppInfo } from "./app-info.ts";
 import { runBrowseAgents } from "./browse-agents-command.ts";
 import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
@@ -26,6 +27,7 @@ import {
   terminalUninstallPrompts,
 } from "./prompts.ts";
 import { runCli } from "./run-cli.ts";
+import { formatSplash } from "./splash.ts";
 import { runUninstall } from "./uninstall-command.ts";
 
 const colors = createColors();
@@ -148,12 +150,19 @@ const menuEntries: MenuEntry[] = [
   },
 ];
 
+function welcome(): void {
+  for (const line of formatSplash(readAppInfo(), colors, process.stdout.columns)) {
+    print(line);
+  }
+}
+
 function menu(): Promise<void> {
   return runMenu({
     title: "What would you like to do?",
     entries: menuEntries,
     choose: chooseMenuEntry,
     interactive,
+    welcome,
   });
 }
 
