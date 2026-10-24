@@ -76,7 +76,7 @@ export function formatOutcomes(outcomes: InstallOutcome[], colors: ChalkInstance
   );
 }
 
-const CANCELLED_MESSAGE = "Cancelled. Nothing was installed.";
+export const CANCELLED_MESSAGE = "Cancelled. Nothing was installed.";
 
 async function chooseSkill(
   options: InstallCommandOptions,

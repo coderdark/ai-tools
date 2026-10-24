@@ -1,8 +1,8 @@
 # ai-tools
 
-A command-line tool that finds the AI agents on your computer and installs a skill into the ones you pick, and removes it again.
+A command-line tool that finds the AI agents on your computer, installs a skill or an MCP (Model Context Protocol) server into the ones you pick, and removes a skill again.
 
-**For now, the tool does three things: install a skill from a folder on your computer, remove an installed skill, and list the skills that are installed.** Plugins, MCP (Model Context Protocol) servers, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
+**For now, the tool does four things: install a skill from a folder on your computer, remove an installed skill, list the skills that are installed, and install an MCP server.** Plugins, listing or removing MCP servers, project-level skills and downloading from git are not built yet. See [PLAN.md](PLAN.md) for the phases.
 
 ## Supported agents
 
@@ -31,7 +31,7 @@ The package defines a command named `ai-tools`. The examples below use `node dis
 
 ## Use it
 
-Run it with no command to get a menu. It has two entries: **Agents** (list) and **Skills** (list, install and uninstall). The menu runs one action and then the tool exits, the same as the matching command. Press Esc in any menu, or Ctrl+C, to leave without doing anything. There is no way back to the top menu from the Skills menu: run the tool again to choose something else:
+Run it with no command to get a menu. It has three entries: **Agents** (list), **Skills** (list, install and uninstall) and **MCP servers** (install). The menu runs one action and then the tool exits, the same as the matching command. Press Esc in any menu, or Ctrl+C, to leave without doing anything. There is no way back to the top menu from the Skills menu: run the tool again to choose something else:
 
 ```sh
 node dist/cli.js
@@ -41,7 +41,7 @@ In the menu, **List skills** opens a list you move through with the arrow keys. 
 
 In the menu, **Agents** opens a list of only the agents that were found, each with how many skills it has, such as `Claude   8 skills`. The line under the highlighted agent shows its skills folder. Press Enter on an agent to see the skills installed in it, each with its date; the tool then exits. Press Esc to leave without choosing.
 
-Esc at the top menu leaves the tool, and its footer reads `esc exit`. Esc in the Skills menu and in the Agents, List skills and uninstall lists cancels, and their footers read `esc cancel`. Esc also cancels each question of **Install a skill**. In every case the tool then ends.
+Esc at the top menu leaves the tool, and its footer reads `esc exit`. Esc in the Skills and MCP servers menus and in the Agents, List skills and uninstall lists cancels, and their footers read `esc cancel`. Esc also cancels each question of **Install a skill** and **Install an MCP server**. In every case the tool then ends.
 
 The tool does not record when it installs a skill, so the date and time are when the skill's folder was created in each agent's skills folder, in your local time as an ISO 8601 date and time with the offset from UTC, such as `2026-05-09T18:06-05:00` (24-hour clock, to the minute). For a skill added as a symlink it is the time of the link. If you copy or move a skill folder yourself, it is the time of the copy. On Linux some file systems do not keep creation times, so the value may be wrong there (not tested). The uninstall list and the Agents screen show the same dates and times.
 
@@ -106,6 +106,52 @@ The tool asks three questions:
 
 There are no flags yet, so this command needs a terminal. In a script it stops with an error and removes nothing.
 
+## Install an MCP server
+
+An MCP server gives an agent extra tools. This adds one server to the user-level settings of the agents you pick, so it is available in all your projects. Project-level settings are not touched.
+
+```sh
+node dist/cli.js mcp install
+```
+
+The tool asks, in order: a name, whether it is a local command or a remote address, the command line (such as `npx -y @modelcontextprotocol/server-filesystem /path`) or the address, any environment variables (for a command) or headers (for an address), one at a time until you enter nothing, which agents, and a confirmation. Press Esc at any question to cancel; nothing is written.
+
+Install without any questions. Write the command after `--`:
+
+```sh
+node dist/cli.js mcp install files --all --yes --env API_KEY=abc123 -- npx -y @modelcontextprotocol/server-filesystem /path
+node dist/cli.js mcp install docs --agent claude --agent cursor --yes --url https://mcp.example.com/mcp --header "X-Api-Key: abc123"
+```
+
+| Flag                     | What it does                                                     |
+| ------------------------ | ---------------------------------------------------------------- |
+| `--url <address>`        | A remote server at this address, instead of a command.           |
+| `--env <KEY=value>`      | A variable for a local command. Repeat it for several.           |
+| `--header "Name: value"` | A header for a remote server. Repeat it for several.             |
+| `--agent <id>`, `--all`, `--yes` | The same as for skills.                                  |
+
+The name uses letters, numbers, hyphens and underscores, up to 64 characters. Without a terminal the command never asks questions: it stops with an error that names what to pass.
+
+How each agent is set up. The tool does not guess where an agent keeps its settings. It runs the agent's own `mcp add` command, so the agent writes its own file in its own format. Cursor has no such command, so the tool adds the entry to `~/.cursor/mcp.json`, keeping everything else in that file.
+
+| Agent   | How the server is added                       | How it was checked                                     |
+| ------- | --------------------------------------------- | ------------------------------------------------------ |
+| Cursor  | the tool edits `~/.cursor/mcp.json`           | docs, a real file and a real run                       |
+| Claude  | `claude mcp add --scope user`                 | docs, `--help` and a real run                          |
+| ChatGPT | `codex mcp add`                               | docs, `--help` and a real run                          |
+| Gemini  | `gemini mcp add --scope user`                 | **docs only. Not tested, because Gemini is not installed here.** |
+| Grok    | `grok mcp add --scope user`                   | **docs only. Not tested, because Grok is not installed here.**   |
+
+After adding, the tool asks the agent whether it now knows the server, using the agent's own command (`claude mcp get`, `codex mcp get`, `agent mcp list` for Cursor, `gemini mcp list`, `grok mcp list`). It prints one line per agent: added and confirmed, added but could not confirm, failed, or skipped. If any agent failed or was skipped, the tool exits with code 1. An agent whose command is not on your `PATH` is skipped.
+
+Things to know:
+
+- **A server with the same name is never replaced.** An agent that already has one is skipped. Codex would otherwise replace it without asking, which a real run showed.
+- **Cursor may not run the server yet.** Cursor can list a new local server as `not loaded (needs approval)`. The tool shows that line and does not approve the server for you. Approve it in Cursor.
+- **Codex cannot take custom headers** from its command line, so a remote server with headers is skipped for Codex. It only reads a bearer token from an environment variable.
+- **Values are saved as typed.** Environment variables and headers go into each agent's settings file in plain text, and are passed to the agent's command, so other programs on your computer could see them while it runs. An environment variable or header you type stays visible on the screen. The tool never prints these values itself, and hides any value of four or more characters in the messages it shows. Shorter values, such as `1`, are left as they are so messages stay readable. Each agent expands references such as `${VAR}` with its own syntax, so check the agent's documentation before using one.
+- **The command line has no shell.** Quotes group words, but pipes, redirects and `$VAR` are passed as plain text.
+
 ## What counts as a skill
 
 A skill is a folder with a `SKILL.md` file at the top. `SKILL.md` starts with a short header:
@@ -127,6 +173,7 @@ The whole folder is copied, except any `.git` folder. The original is not moved 
 - Nothing is overwritten unless you pass `--force`, and `--force` replaces only the copy of this skill in each agent you chose. Your other skills are not touched.
 - If a copy fails part-way, the tool deletes the copies it created earlier in the same run. A copy that `--force` already replaced is not restored.
 - The tool refuses to install a skill onto itself.
+- MCP servers: an existing server is never replaced, a settings file the tool cannot read as JSON is left unchanged, and the tool writes it through a temporary file so a failure cannot leave half a file.
 - A removed skill can't be recovered, because the tool has no trash or backup. It only removes a folder that has a `SKILL.md`, and it checks every chosen agent before it removes from any.
 - Cursor also reads the Claude and ChatGPT folders. If Cursor is installed and you didn't choose it, installing into Claude or ChatGPT prints a note that Cursor will see the skill too. Removing a skill from Claude or ChatGPT also removes it for Cursor, and the tool does not print a note about that.
 

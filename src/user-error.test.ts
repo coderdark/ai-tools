@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Chalk } from "chalk";
 import { UsageError } from "./install-command.ts";
+import { McpInputError } from "./mcp/server.ts";
 import { SelectionError } from "./selection.ts";
 import { InstallError } from "./skills/install.ts";
 import { SkillError } from "./skills/skill.ts";
@@ -13,6 +14,7 @@ test("isUserError is true for the errors that tell the user what to fix", () => 
     new SelectionError("x"),
     new InstallError("x"),
     new UsageError("x"),
+    new McpInputError("x"),
   ]) {
     assert.equal(isUserError(error), true, error.constructor.name);
   }

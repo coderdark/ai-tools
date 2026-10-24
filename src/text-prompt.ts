@@ -5,14 +5,24 @@ export interface TextPromptConfig {
   message: string;
   /** The line shown under the field while the user types, such as the keys that work. */
   footer: string;
-  /** Resolves to `true` when the value is acceptable, or to the message to show when it is not. */
-  validate(value: string): Promise<true | string>;
+  /** Returns `true` when the value is acceptable, or the message to show when it is not. */
+  validate(value: string): true | string | Promise<true | string>;
+  /** Lets the user submit nothing, which resolves to an empty string. */
+  allowEmpty?: boolean;
 }
 
 const EMPTY_VALUE_MESSAGE = "You must provide a value";
 
+async function checkValue(config: TextPromptConfig, value: string): Promise<true | string> {
+  if (value) {
+    return config.validate(value);
+  }
+
+  return config.allowEmpty ? true : EMPTY_VALUE_MESSAGE;
+}
+
 /**
- * A required text field with a footer line, like the footer of the lists.
+ * A text field, required unless `allowEmpty` is set, with a footer line like the footer of the lists.
  * `@inquirer/input` has no footer, so this is a small prompt of our own.
  */
 export const textPromptWithFooter = createPrompt<string, TextPromptConfig>((config, done) => {
@@ -35,7 +45,7 @@ export const textPromptWithFooter = createPrompt<string, TextPromptConfig>((conf
 
     setStatus("loading");
 
-    const result = value ? await config.validate(value) : EMPTY_VALUE_MESSAGE;
+    const result = await checkValue(config, value);
 
     if (result === true) {
       setStatus("done");

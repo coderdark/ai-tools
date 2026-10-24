@@ -22,6 +22,15 @@ test("buildAgentChoices puts an All row first, followed by one row per found age
   ]);
 });
 
+test("buildAgentChoices leaves the description out when the caller has none to show", () => {
+  const choices = buildAgentChoices([foundResult("cursor")], () => undefined);
+
+  assert.deepEqual(choices, [
+    { name: "All agents", value: ALL_AGENTS },
+    { name: "Cursor", value: "cursor" },
+  ]);
+});
+
 test("toSelectionRequest asks for all agents when the All row is selected, even with others", () => {
   assert.deepEqual(toSelectionRequest([ALL_AGENTS]), { all: true });
   assert.deepEqual(toSelectionRequest(["cursor", ALL_AGENTS]), { all: true });

@@ -1,7 +1,7 @@
 {
   "name": "ai-tools",
   "version": "0.1.0",
-  "description": "Scan this computer for AI agents and install skills into them.",
+  "description": "Scan this computer for AI agents, then manage their skills and MCP servers.",
   "type": "module",
   "private": true,
   "bin": {
@@ -24,6 +24,7 @@
     "chalk": "^6.0.1",
     "commander": "^15.0.0",
     "ora": "^9.4.1",
+    "string-argv": "^0.4.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

@@ -12,12 +12,24 @@ export interface AgentChoice {
   description?: string;
 }
 
-export function buildAgentChoices(found: ScanResult[]): AgentChoice[] {
-  const agentChoices = found.map(({ agent, skillsDir }) => ({
-    name: agent.name,
-    value: agent.id,
-    description: skillsDir,
-  }));
+function skillsFolder({ skillsDir }: ScanResult): string {
+  return skillsDir;
+}
+
+/** `describe` gives the line shown under the highlighted agent. It defaults to the skills folder. */
+export function buildAgentChoices(
+  found: ScanResult[],
+  describe: (result: ScanResult) => string | undefined = skillsFolder,
+): AgentChoice[] {
+  const agentChoices = found.map((result) => {
+    const description = describe(result);
+
+    return {
+      name: result.agent.name,
+      value: result.agent.id,
+      ...(description === undefined ? {} : { description }),
+    };
+  });
 
   return [{ name: "All agents", value: ALL_AGENTS }, ...agentChoices];
 }

@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { InstallCommandOptions } from "./install-command.ts";
+import type { McpInstallOptions } from "./mcp-install-command.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
 
 interface Recorded {
   installs: InstallCommandOptions[];
+  mcpInstalls: McpInstallOptions[];
   agents: number;
   uninstalls: number;
   skills: number;
@@ -12,10 +14,13 @@ interface Recorded {
 }
 
 async function run(args: string[]): Promise<Recorded> {
-  const recorded: Recorded = { installs: [], agents: 0, uninstalls: 0, skills: 0, menus: 0 };
+  const recorded: Recorded = { installs: [], mcpInstalls: [], agents: 0, uninstalls: 0, skills: 0, menus: 0 };
   const handlers: ProgramHandlers = {
     install: async (options) => {
       recorded.installs.push(options);
+    },
+    mcpInstall: async (options) => {
+      recorded.mcpInstalls.push(options);
     },
     agents: async () => {
       recorded.agents += 1;
@@ -64,24 +69,25 @@ test("install uses empty defaults for the flags that were not given", async () =
 test("agents runs only the agents handler", async () => {
   const recorded = await run(["agents"]);
 
-  assert.deepEqual(recorded, { installs: [], agents: 1, uninstalls: 0, skills: 0, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], agents: 1, uninstalls: 0, skills: 0, menus: 0 });
 });
 
 test("uninstall runs only the uninstall handler", async () => {
   const recorded = await run(["uninstall"]);
 
-  assert.deepEqual(recorded, { installs: [], agents: 0, uninstalls: 1, skills: 0, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], agents: 0, uninstalls: 1, skills: 0, menus: 0 });
 });
 
 test("skills runs only the skills handler", async () => {
   const recorded = await run(["skills"]);
 
-  assert.deepEqual(recorded, { installs: [], agents: 0, uninstalls: 0, skills: 1, menus: 0 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], agents: 0, uninstalls: 0, skills: 1, menus: 0 });
 });
 
 test("the program is named ai-tools, to match the command in package.json", () => {
   const handlers: ProgramHandlers = {
     install: async () => {},
+    mcpInstall: async () => {},
     agents: async () => {},
     uninstall: async () => {},
     skills: async () => {},
@@ -94,5 +100,52 @@ test("the program is named ai-tools, to match the command in package.json", () =
 test("running with no command opens the menu", async () => {
   const recorded = await run([]);
 
-  assert.deepEqual(recorded, { installs: [], agents: 0, uninstalls: 0, skills: 0, menus: 1 });
+  assert.deepEqual(recorded, { installs: [], mcpInstalls: [], agents: 0, uninstalls: 0, skills: 0, menus: 1 });
+});
+
+test("mcp install passes the name, the command after -- and every flag", async () => {
+  const { mcpInstalls } = await run([
+    "mcp", "install", "fs", "--agent", "claude", "--agent", "gemini", "--env", "A=1", "--env", "B=2", "--yes",
+    "--", "npx", "-y", "pkg", "/data",
+  ]);
+
+  assert.deepEqual(mcpInstalls, [
+    {
+      name: "fs",
+      url: undefined,
+      command: ["npx", "-y", "pkg", "/data"],
+      env: ["A=1", "B=2"],
+      headers: [],
+      agents: ["claude", "gemini"],
+      all: false,
+      yes: true,
+    },
+  ]);
+});
+
+test("mcp install passes the address and the headers of a remote server", async () => {
+  const { mcpInstalls } = await run([
+    "mcp", "install", "api", "--url", "https://mcp.example.com/mcp", "--header", "Authorization: Bearer x", "--all",
+  ]);
+
+  assert.deepEqual(mcpInstalls, [
+    {
+      name: "api",
+      url: "https://mcp.example.com/mcp",
+      command: [],
+      env: [],
+      headers: ["Authorization: Bearer x"],
+      agents: [],
+      all: true,
+      yes: false,
+    },
+  ]);
+});
+
+test("mcp install with nothing else passes empty values, so the handler asks", async () => {
+  const { mcpInstalls } = await run(["mcp", "install"]);
+
+  assert.deepEqual(mcpInstalls, [
+    { name: undefined, url: undefined, command: [], env: [], headers: [], agents: [], all: false, yes: false },
+  ]);
 });

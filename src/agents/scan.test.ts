@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { defaultScanEnv, scanAgents, type ScanEnv } from "./scan.ts";
+import { defaultScanEnv, isOnPath, scanAgents, type ScanEnv } from "./scan.ts";
 
 async function makeEnv(t: TestContext): Promise<ScanEnv> {
   const root = await mkdtemp(join(tmpdir(), "ai-toolbox-scan-"));
@@ -128,4 +128,23 @@ test("Cursor installs into skills, never into Cursor's built-in skills-cursor", 
 
   assert.equal(cursor?.skillsDir, join(env.home, ".cursor", "skills"));
   assert.ok(!cursor?.skillsDir.includes("skills-cursor"));
+});
+
+test("isOnPath finds an executable file in any of the folders, and ignores other entries", async (t) => {
+  const env = await makeEnv(t);
+  const [bin] = env.pathDirs;
+
+  assert.ok(bin);
+
+  await writeFile(join(bin, "tool"), "#!/bin/sh\n");
+  await chmod(join(bin, "tool"), 0o755);
+  await writeFile(join(bin, "plain"), "text");
+  await chmod(join(bin, "plain"), 0o644);
+  await mkdir(join(bin, "folder"));
+
+  assert.equal(isOnPath("tool", [join(bin, "missing"), bin]), true);
+  assert.equal(isOnPath("plain", [bin]), false);
+  assert.equal(isOnPath("folder", [bin]), false);
+  assert.equal(isOnPath("absent", [bin]), false);
+  assert.equal(isOnPath("tool", []), false);
 });

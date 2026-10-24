@@ -1,8 +1,10 @@
 import { Command } from "commander";
 import type { InstallCommandOptions } from "./install-command.ts";
+import type { McpInstallOptions } from "./mcp-install-command.ts";
 
 export interface ProgramHandlers {
   install(options: InstallCommandOptions): Promise<void>;
+  mcpInstall(options: McpInstallOptions): Promise<void>;
   agents(): Promise<void>;
   uninstall(): Promise<void>;
   skills(): Promise<void>;
@@ -16,6 +18,15 @@ interface InstallFlags {
   yes?: boolean;
 }
 
+interface McpInstallFlags {
+  url?: string;
+  env: string[];
+  header: string[];
+  agent: string[];
+  all?: boolean;
+  yes?: boolean;
+}
+
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
@@ -23,7 +34,7 @@ function collect(value: string, previous: string[]): string[] {
 export function buildProgram(handlers: ProgramHandlers): Command {
   const program = new Command()
     .name("ai-tools")
-    .description("Install skills into the AI agents on this computer.")
+    .description("Manage the skills and MCP servers of the AI agents on this computer.")
     .action(handlers.menu);
 
   program
@@ -45,6 +56,34 @@ export function buildProgram(handlers: ProgramHandlers): Command {
         agents: flags.agent,
         all: Boolean(flags.all),
         force: Boolean(flags.force),
+        yes: Boolean(flags.yes),
+      }),
+    );
+
+  const mcp = program
+    .command("mcp")
+    .description("Manage the MCP servers of the AI agents on this computer.");
+
+  mcp
+    .command("install")
+    .description("Install an MCP server into one or more agents.")
+    .argument("[name]", "name for the server")
+    .argument("[command...]", "command and arguments that start a local server, written after --")
+    .option("--url <address>", "address of a remote server, instead of a command")
+    .option("--env <KEY=value>", "variable for a local server (repeat for several)", collect, [])
+    .option("--header <header>", 'header for a remote server, as "Name: value" (repeat for several)', collect, [])
+    .option("--agent <id>", "agent to install into (repeat for several)", collect, [])
+    .option("--all", "install into every agent that was found")
+    .option("--yes", "skip the confirmation")
+    .action((name: string | undefined, command: string[], flags: McpInstallFlags) =>
+      handlers.mcpInstall({
+        name,
+        url: flags.url,
+        command,
+        env: flags.env,
+        headers: flags.header,
+        agents: flags.agent,
+        all: Boolean(flags.all),
         yes: Boolean(flags.yes),
       }),
     );

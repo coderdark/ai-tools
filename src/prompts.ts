@@ -2,15 +2,26 @@ import { checkbox, confirm, select } from "@inquirer/prompts";
 import { resolve } from "node:path";
 import { styleText } from "node:util";
 import type { AgentId } from "./agents/registry.ts";
+import type { ScanResult } from "./agents/scan.ts";
 import { buildAgentChoices, toSelectionRequest, type AgentChoiceValue } from "./agent-choices.ts";
 import type { BrowseAgentsPrompts } from "./browse-agents-command.ts";
 import type { BrowseSkillsPrompts } from "./browse-skills-command.ts";
 import { runUntilEscape } from "./escape.ts";
 import { formatAgentChoices, formatInstalledIn } from "./format.ts";
 import type { InstallPrompts } from "./install-command.ts";
+import type { McpInstallPrompts, McpKind } from "./mcp-install-command.ts";
+import {
+  checkCommandLine,
+  checkEnvEntry,
+  checkHeaderEntry,
+  checkServerName,
+  checkUrl,
+  describeServer,
+} from "./mcp/server.ts";
 import type { MenuEntry, MenuRequest } from "./menu.ts";
+import type { SelectionRequest } from "./selection.ts";
 import { readSkill } from "./skills/skill.ts";
-import { textPromptWithFooter } from "./text-prompt.ts";
+import { textPromptWithFooter, type TextPromptConfig } from "./text-prompt.ts";
 import type { UninstallPrompts } from "./uninstall-command.ts";
 
 async function validateSkillDir(value: string): Promise<true | string> {
@@ -50,51 +61,111 @@ function selectWithEscape<Value>(
   );
 }
 
+function askText(
+  message: string,
+  validate: TextPromptConfig["validate"],
+  allowEmpty = false,
+): Promise<string | undefined> {
+  return withEscape((signal) =>
+    textPromptWithFooter(
+      { message, footer: keysHelpTipWithEscape("cancel")([["⏎", "submit"]]), validate, allowEmpty },
+      { signal },
+    ),
+  );
+}
+
+async function askAgents(
+  message: string,
+  found: ScanResult[],
+  describe?: Parameters<typeof buildAgentChoices>[1],
+): Promise<SelectionRequest | undefined> {
+  const selected = await withEscape((signal) =>
+    checkbox<AgentChoiceValue>(
+      {
+        message,
+        choices: buildAgentChoices(found, describe),
+        required: true,
+        theme: { style: { keysHelpTip: keysHelpTipWithEscape("cancel") } },
+      },
+      { signal },
+    ),
+  );
+
+  return selected === undefined ? undefined : toSelectionRequest(selected);
+}
+
+/** Pressing Esc counts as "No". */
+async function askYesNo(message: string): Promise<boolean> {
+  const answer = await selectWithEscape<boolean>(
+    {
+      message,
+      choices: [
+        { name: "Yes", value: true },
+        { name: "No", value: false },
+      ],
+    },
+    "cancel",
+  );
+
+  return answer ?? false;
+}
+
 export const terminalPrompts: InstallPrompts = {
   async skillDir() {
-    const dir = await withEscape((signal) =>
-      textPromptWithFooter(
-        {
-          message: "Path to the skill folder",
-          footer: keysHelpTipWithEscape("cancel")([["⏎", "submit"]]),
-          validate: validateSkillDir,
-        },
-        { signal },
-      ),
-    );
+    const dir = await askText("Path to the skill folder", validateSkillDir);
 
     return dir === undefined ? undefined : resolve(dir);
   },
 
-  async agents(found) {
-    const selected = await withEscape((signal) =>
-      checkbox<AgentChoiceValue>(
-        {
-          message: "Which agents should get this skill?",
-          choices: buildAgentChoices(found),
-          required: true,
-          theme: { style: { keysHelpTip: keysHelpTipWithEscape("cancel") } },
-        },
-        { signal },
-      ),
-    );
-
-    return selected === undefined ? undefined : toSelectionRequest(selected);
+  agents(found) {
+    return askAgents("Which agents should get this skill?", found);
   },
 
-  async confirm(skill, agentNames) {
-    const confirmed = await selectWithEscape<boolean>(
+  confirm(skill, agentNames) {
+    return askYesNo(`Install ${skill.name} into ${agentNames.join(", ")}?`);
+  },
+};
+
+export const terminalMcpInstallPrompts: McpInstallPrompts = {
+  name() {
+    return askText("Name for the MCP server (letters, numbers, - and _)", checkServerName);
+  },
+
+  transport() {
+    return selectWithEscape<McpKind>(
       {
-        message: `Install ${skill.name} into ${agentNames.join(", ")}?`,
+        message: "What kind of MCP server is it?",
         choices: [
-          { name: "Yes", value: true },
-          { name: "No", value: false },
+          { name: "Local command", value: "stdio", description: "Starts on this computer, such as npx -y my-mcp-server" },
+          { name: "Remote address", value: "http", description: "Lives at an http:// or https:// address" },
         ],
       },
       "cancel",
     );
+  },
 
-    return confirmed ?? false;
+  commandLine() {
+    return askText("Command that starts the server (for example npx -y my-mcp-server)", checkCommandLine);
+  },
+
+  url() {
+    return askText("Address of the server", checkUrl);
+  },
+
+  envEntry() {
+    return askText("Environment variable, KEY=value (empty to finish; values are saved as typed)", checkEnvEntry, true);
+  },
+
+  headerEntry() {
+    return askText("Header, Name: value (empty to finish; values are saved as typed)", checkHeaderEntry, true);
+  },
+
+  agents(found) {
+    return askAgents("Which agents should get this MCP server?", found, () => undefined);
+  },
+
+  confirm(server, agentNames) {
+    return askYesNo(`Install MCP server ${server.name} (${describeServer(server)}) into ${agentNames.join(", ")}?`);
   },
 };
 

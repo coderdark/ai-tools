@@ -40,10 +40,12 @@ function hasHomeDir(agent: Agent, env: ScanEnv): boolean {
   return agent.homeDirs.some((dir) => existsSync(join(env.home, dir)));
 }
 
+export function isOnPath(name: string, pathDirs: string[]): boolean {
+  return pathDirs.some((dir) => isExecutableFile(join(dir, name)));
+}
+
 function hasBinary(agent: Agent, env: ScanEnv): boolean {
-  return agent.binaries.some((name) =>
-    env.pathDirs.some((dir) => isExecutableFile(join(dir, name))),
-  );
+  return agent.binaries.some((name) => isOnPath(name, env.pathDirs));
 }
 
 function hasApp(agent: Agent, env: ScanEnv): boolean {

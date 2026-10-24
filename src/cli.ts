@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-import { defaultScanEnv, scanAgents } from "./agents/scan.ts";
+import { defaultScanEnv, isOnPath, scanAgents } from "./agents/scan.ts";
 import { runBrowseAgents } from "./browse-agents-command.ts";
 import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
 import { runInstall, type InstallCommandOptions } from "./install-command.ts";
 import { runListSkills } from "./list-skills-command.ts";
+import { runMcpInstall, type McpInstallOptions } from "./mcp-install-command.ts";
+import { installMcpServer } from "./mcp/install.ts";
+import { runCommand } from "./mcp/run-command.ts";
 import { runMenu, type MenuEntry } from "./menu.ts";
 import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
@@ -13,6 +16,7 @@ import {
   chooseMenuEntry,
   terminalBrowseAgentsPrompts,
   terminalBrowsePrompts,
+  terminalMcpInstallPrompts,
   terminalPrompts,
   terminalUninstallPrompts,
 } from "./prompts.ts";
@@ -38,6 +42,26 @@ function install(options: InstallCommandOptions): Promise<void> {
     print,
     interactive,
     colors,
+  });
+}
+
+function mcpInstall(options: McpInstallOptions): Promise<void> {
+  const { home, pathDirs } = defaultScanEnv();
+
+  return runMcpInstall(options, {
+    scan,
+    prompts: terminalMcpInstallPrompts,
+    progress: createProgress(),
+    print,
+    interactive,
+    colors,
+    install: (server, agents, onProgress) =>
+      installMcpServer(server, agents, {
+        home,
+        isOnPath: (name) => isOnPath(name, pathDirs),
+        runCommand,
+        onProgress,
+      }),
   });
 }
 
@@ -80,6 +104,7 @@ const menuEntries: MenuEntry[] = [
       { name: "Uninstall a skill", run: uninstall },
     ],
   },
+  { name: "MCP servers", entries: [{ name: "Install an MCP server", run: () => mcpInstall({}) }] },
 ];
 
 function menu(): Promise<void> {
@@ -91,7 +116,7 @@ function menu(): Promise<void> {
   });
 }
 
-const handlers: ProgramHandlers = { install, agents, uninstall, skills, menu };
+const handlers: ProgramHandlers = { install, mcpInstall, agents, uninstall, skills, menu };
 
 process.exitCode = await runCli(buildProgram(handlers), process.argv.slice(2), {
   error: (line) => console.error(line),
