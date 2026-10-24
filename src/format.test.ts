@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { Chalk } from "chalk";
 import { AGENTS, type AgentId } from "./agents/registry.ts";
 import type { ScanResult } from "./agents/scan.ts";
-import { formatAgentList, formatSkillDetails, formatSkillList } from "./format.ts";
+import {
+  formatAgentDetails,
+  formatAgentList,
+  formatInstalledIn,
+  formatSkillDetails,
+  formatSkillList,
+} from "./format.ts";
 import type { InstalledSkill } from "./skills/list.ts";
 
 const plain = new Chalk({ level: 0 });
@@ -39,7 +45,13 @@ test("formatAgentList colors found agents green with a cyan path, and dims missi
   assert.equal(missing, colored.dim("missing  Claude   /home/.claude/skills"));
 });
 
-function skillsOn(entries: Record<string, AgentId[]>): InstalledSkill[] {
+const MAY_9 = new Date(2026, 4, 9, 12);
+const OCT_24 = new Date(2026, 9, 24, 12);
+
+function skillsOn(
+  entries: Record<string, AgentId[]>,
+  dates: Partial<Record<AgentId, Date>> = {},
+): InstalledSkill[] {
   return Object.entries(entries).map(([name, ids]) => ({
     name,
     targets: ids.map((id) => {
@@ -47,7 +59,7 @@ function skillsOn(entries: Record<string, AgentId[]>): InstalledSkill[] {
 
       assert.ok(agent, `unknown agent ${id}`);
 
-      return { agent, skillsDir: `/home/.${id}/skills` };
+      return { agent, skillsDir: `/home/.${id}/skills`, installedAt: dates[id] ?? MAY_9 };
     }),
   }));
 }
@@ -73,18 +85,98 @@ test("formatSkillDetails prints the skill name, then each agent with the skill's
   assert.ok(skill);
   assert.deepEqual(formatSkillDetails(skill, plain), [
     "review-pr",
-    "  Cursor  /home/.cursor/skills/review-pr",
-    "  Claude  /home/.claude/skills/review-pr",
+    "  Cursor  2026-05-09  /home/.cursor/skills/review-pr",
+    "  Claude  2026-05-09  /home/.claude/skills/review-pr",
   ]);
 });
 
-test("formatSkillDetails lines up the folders and colors them cyan", () => {
+test("formatSkillDetails lines up the dates and folders, dims the date and colors the folder cyan", () => {
   const [skill] = skillsOn({ alpha: ["chatgpt", "claude"] });
 
   assert.ok(skill);
   assert.deepEqual(formatSkillDetails(skill, colored), [
     "alpha",
-    `  ChatGPT  ${colored.cyan("/home/.chatgpt/skills/alpha")}`,
-    `  Claude   ${colored.cyan("/home/.claude/skills/alpha")}`,
+    `  ChatGPT  ${colored.dim("2026-05-09")}  ${colored.cyan("/home/.chatgpt/skills/alpha")}`,
+    `  Claude   ${colored.dim("2026-05-09")}  ${colored.cyan("/home/.claude/skills/alpha")}`,
+  ]);
+});
+
+test("formatSkillDetails shows each agent's own date", () => {
+  const [skill] = skillsOn({ alpha: ["cursor", "claude"] }, { cursor: OCT_24 });
+
+  assert.ok(skill);
+  assert.deepEqual(formatSkillDetails(skill, plain), [
+    "alpha",
+    "  Cursor  2026-10-24  /home/.cursor/skills/alpha",
+    "  Claude  2026-05-09  /home/.claude/skills/alpha",
+  ]);
+});
+
+test("formatInstalledIn names the agent and the date", () => {
+  const [skill] = skillsOn({ alpha: ["claude"] });
+
+  assert.ok(skill);
+  assert.equal(formatInstalledIn(skill), "Installed in Claude on 2026-05-09");
+});
+
+test("formatInstalledIn gives the date once when every agent has the same one", () => {
+  const [skill] = skillsOn({ alpha: ["cursor", "claude"] });
+
+  assert.ok(skill);
+  assert.equal(formatInstalledIn(skill), "Installed in Cursor, Claude on 2026-05-09");
+});
+
+test("formatInstalledIn groups the agents that share a date when the dates differ", () => {
+  const [skill] = skillsOn(
+    { alpha: ["cursor", "claude", "chatgpt"] },
+    { cursor: OCT_24, claude: OCT_24 },
+  );
+
+  assert.ok(skill);
+  assert.equal(
+    formatInstalledIn(skill),
+    "Installed in Cursor, Claude on 2026-10-24; ChatGPT on 2026-05-09",
+  );
+});
+
+function targetOf(id: AgentId) {
+  const agent = AGENTS.find((candidate) => candidate.id === id);
+
+  assert.ok(agent, `unknown agent ${id}`);
+
+  return { agent, skillsDir: `/home/.${id}/skills` };
+}
+
+test("formatAgentDetails prints the skills folder, then the agent's skills with the date of its own copy", () => {
+  const skills = skillsOn({ alpha: ["claude"], "review-pr": ["claude", "cursor"] }, { cursor: OCT_24 });
+
+  assert.deepEqual(formatAgentDetails(targetOf("claude"), skills, plain), [
+    "Claude  /home/.claude/skills",
+    "  alpha      2026-05-09",
+    "  review-pr  2026-05-09",
+  ]);
+  assert.deepEqual(formatAgentDetails(targetOf("cursor"), skills, plain), [
+    "Cursor  /home/.cursor/skills",
+    "  review-pr  2026-10-24",
+  ]);
+});
+
+test("formatAgentDetails says so when the agent has no skills", () => {
+  assert.deepEqual(formatAgentDetails(targetOf("grok"), [], plain), [
+    "Grok  /home/.grok/skills",
+    "  No skills installed",
+  ]);
+});
+
+test("formatAgentDetails colors the folder cyan and dims the dates and the empty message", () => {
+  const skills = skillsOn({ alpha: ["claude"] });
+
+  assert.deepEqual(formatAgentDetails(targetOf("claude"), skills, colored), [
+    `Claude  ${colored.cyan("/home/.claude/skills")}`,
+    `  alpha  ${colored.dim("2026-05-09")}`,
+  ]);
+  assert.deepEqual(formatAgentDetails(targetOf("grok"), [], colored), [
+    `Grok  ${colored.cyan("/home/.grok/skills")}`,
+    `  ${colored.dim("No skills installed")}`,
   ]);
 });

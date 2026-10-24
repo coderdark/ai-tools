@@ -24,7 +24,7 @@ On the machine this was planned on, the scan finds Cursor, Claude, and ChatGPT. 
 
 ```mermaid
 flowchart TD
-  start["ai-tools"] --> menu["Skills, Agents, or Exit"]
+  start["ai-tools"] --> menu["Skills or Agents"]
   menu --> show["Agents: scan, then print found and missing agents"]
   menu --> skillsMenu["Skills: list, install, uninstall, or Back"]
   skillsMenu --> scan["Install: scan home, PATH, and Applications"]
@@ -32,13 +32,13 @@ flowchart TD
   path --> pick["Checkbox of found agents, plus All"]
   pick --> confirm["Confirm"]
   confirm --> copy["Copy into each chosen skill directory"]
-  copy --> skillsMenu
-  skillsMenu --> menu
-  show --> menu
-  menu --> done["Exit"]
+  copy --> done["The tool exits"]
+  skillsMenu -->|"Back or Esc"| menu
+  show --> done
+  menu -->|"Esc"| leave["The tool exits"]
 ```
 
-`ai-tools` with no command opens a menu with **Skills**, **Agents** and **Exit**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** prints the agent list. Each action scans when it is chosen. After an action ends, the menu it was chosen from is shown again, so the user stays in **Skills** until they pick **Back**. The user leaves with **Exit** (exit code 0) or Ctrl+C (exit code 130). **Agents** prints the scan, and `ai-tools agents` prints that same list with no menu. **List skills** opens a list of the installed skills that the user moves through, and `ai-tools skills` prints the same skills as plain lines with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
+`ai-tools` with no command opens a menu with **Skills** and **Agents**. **Skills** opens a second menu with **List skills**, **Install a skill**, **Uninstall a skill** and **Back**. **Agents** opens a list of the found agents. Each action scans when it is chosen. An action runs once and the tool then exits, the same as the command of the same name. **Back** (or Esc) in **Skills** returns to the top menu. The user leaves the top menu with Esc (exit code 0) or Ctrl+C (exit code 130). The top menu has no **Exit** row: its footer reads `↑↓ navigate • ⏎ select • esc exit`. `ai-tools agents` prints the whole scan, found and missing agents, with no menu. **List skills** opens a list of the installed skills that the user moves through, and `ai-tools skills` prints the same skills as plain lines with no menu. `ai-tools install` skips the menu and starts at the skill folder. `ai-tools uninstall` skips the menu and starts at the list of installed skills.
 
 Install prompts, in order:
 
@@ -83,7 +83,9 @@ Prompts, in order:
 
 `ai-tools skills` prints one line per skill, sorted by name: the name padded to the widest name, then the agents that have it in dim text, such as `review-pr  Cursor, Claude`. It uses the same list as uninstall, so the validity rules above apply and skills added by hand are included. Only agents the scan found are read. It asks no questions and works without a terminal. If no agent is found it is an error. If no skills are installed it prints "No skills are installed in the agents that were found." and exits with 0. It prints no description, because that would need `SKILL.md` to be read for every skill.
 
-In the menu, **List skills** shows the same skills as a list with a highlighted row, like the skill list in uninstall. The line under the highlighted row says which agents have it (`Installed in Cursor, Claude`). Enter on a skill prints its details and shows the list again: the skill name, then each agent with the skill's folder. Esc leaves the list, and the list has no **Back** row: the footer reads `↑↓ navigate • ⏎ select • esc back`. Inquirer's list has no Esc key, so `src/escape.ts` listens for it on stdin and cancels the prompt with an `AbortSignal`, which Inquirer supports. A lone Esc takes about half a second to register, because the terminal waits to see whether it starts an arrow-key sequence. It changes nothing on disk. It needs a terminal, as the rest of the menu does. A pager (`less`) was tried first and dropped: a list shorter than the screen never opened it, so nothing could be moved through.
+In the menu, **List skills** shows the same skills as a list with a highlighted row, like the skill list in uninstall. The line under the highlighted row says which agents have it and when: `Installed in Cursor, Claude on 2026-05-09`, or `Installed in Cursor, Claude on 2026-10-24; ChatGPT on 2026-05-09` when agents differ. Enter on a skill prints its details, the skill name then each agent with its date and the skill's folder, and the tool exits: the list is not shown again, because the menu runs one action. Esc leaves without choosing, and the list has no **Back** row: the footer reads `↑↓ navigate • ⏎ select • esc exit`, because both Esc and Enter end the action and so the tool. Inquirer's list has no Esc key, so `src/escape.ts` listens for it on stdin and cancels the prompt with an `AbortSignal`, which Inquirer supports. A lone Esc takes about half a second to register, because the terminal waits to see whether it starts an arrow-key sequence. It changes nothing on disk. It needs a terminal, as the rest of the menu does. The date is the creation time of the skill's folder (`lstat` `birthtime`), because the tool stores no install record and existing skills have none. `lstat` is used so a symlinked skill shows the date of the link, not of the folder it points to. A forced reinstall removes and re-copies the folder, so it gets a new date. Dates print as `YYYY-MM-DD` in local time, from `Intl.DateTimeFormat("en-CA")`. Creation time is checked on macOS only: Node documents that file systems without it report another time, so Linux dates are unverified. `ai-tools skills` does not show dates. The uninstall list shows the same line as this list. A pager (`less`) was tried first and dropped: a list shorter than the screen never opened it, so nothing could be moved through.
+
+In the menu, **Agents** is the same kind of list, but only of the agents the scan found: missing agents are left out. The line under the highlighted agent is its skills folder. Enter prints the folder and the skills installed in that agent, with the date of that agent's copy, or "No skills installed", and the tool exits; the list is not shown again. Esc leaves without choosing, and the footer reads `esc exit`. `ai-tools agents` is unchanged: it prints every agent with its status, as plain text for scripts. If no agent is found it is an error, as for the other commands.
 
 ## Presentation
 
@@ -93,13 +95,12 @@ Found agents are green, missing agents are dim, and skill paths are cyan. After 
 
 ## Menu
 
-The menu is a session, so it loops, while the commands are one-shot: each command runs once and exits, so scripts can use it. This is a design choice, not a rule from a published standard. The menu is a tree of entries. An entry is either an action or a group of more entries, and the root shows **Exit** where a group shows **Back**. To add a feature, such as plugins or MCP servers, add an entry to `menuEntries` in `src/cli.ts`; `src/menu.ts` does not change. The loop is in `src/menu.ts`, and every dependency is passed in, so tests use fakes.
+The menu is a launcher: the user picks one action, it runs once, and the tool exits, the same as the matching command. This is a design choice, not a rule from a published standard. An earlier version returned to the menu after every action; it was removed because it felt odd in use. The menu is a tree of entries. An entry is either an action or a group of more entries, and a group shows a **Back** row where the root shows none, because the root is left with Esc. **Back** only leaves a group for the menu above it, so it is navigation, not a repeat. To add a feature, such as plugins or MCP servers, add an entry to `menuEntries` in `src/cli.ts`; `src/menu.ts` does not change. Every dependency is passed in, so tests use fakes.
 
 - The menu needs a terminal. Without one it exits with an error that points to the commands, and it never draws the menu into a pipe.
-- Esc goes back wherever there is a way back: in a group such as **Skills**, on the **List skills** list, and on the skill list in uninstall, where it cancels with "Cancelled. Nothing was removed." Each of those lists shows `esc back` in its footer. At the top menu Esc does nothing, so a stray key press cannot close the tool; the user leaves with **Exit** or Ctrl+C. `MenuRequest.canGoBack` tells the prompt which case it is in. The other prompts (the agent checkboxes and the confirmations) do not use Esc yet.
-- A user error in an action (a skill that already exists, for example) prints in red and returns to the menu it came from. The messages come from `src/user-error.ts`, which `src/run-cli.ts` also uses.
-- Any other error ends the program with exit code 1.
-- Ctrl+C quits the whole program with code 130, at the menu or in any prompt. It does not go back to the menu.
+- Esc leaves wherever a menu or list is shown: in a group such as **Skills**, where it returns to the top menu; on the **List skills** list, where it ends the action and so the tool; and on the skill list in uninstall, where it cancels with "Cancelled. Nothing was removed." The footer names what Esc does: `esc back` in a group and in the uninstall list, and `esc exit` on the **List skills** list. At the top menu Esc leaves the tool, and its footer reads `esc exit`. A stray Esc there closes the tool, which was an accepted trade-off. Nothing is lost, because the menu has done nothing yet. `MenuRequest.isTopLevel` tells the prompt which case it is in, for the **Back** row and the footer word. The other prompts (the agent checkboxes and the confirmations) do not use Esc yet.
+- An error in an action ends the program with exit code 1, the same as for a command. A user error (a skill that already exists, for example) prints as a red message from `src/user-error.ts`, which `src/run-cli.ts` uses. Any other error is reported by `src/run-cli.ts` as well.
+- Ctrl+C quits the whole program with code 130, at the menu or in any prompt.
 
 ## Tech stack and layout
 
@@ -116,8 +117,8 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/cli.ts` — wires the real scan, prompts, spinner, colors, and output into the program. It has no test of its own; it is checked by running the built tool.
 - `src/program.ts` — Commander commands and flags
 - `src/run-cli.ts` — runs the program and turns errors into messages and exit codes
-- `src/user-error.ts` — which errors are user errors, and how they are printed. Used by `run-cli.ts` and `menu.ts`.
-- `src/menu.ts` — the menu tree and loop: ask, open a group or run an action, show a user error and ask again, until Exit or Back
+- `src/user-error.ts` — which errors are user errors, and how they are printed. Used by `run-cli.ts`.
+- `src/menu.ts` — the menu tree: ask, open a group (Back returns to the menu above) or run one action, then stop
 - `src/install-command.ts` — the install flow: choose, confirm, install, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/selection.ts` — turns `--agent` and `--all` into install targets
 - `src/agent-choices.ts` — the checkbox rows, with **All** first, and the selection they produce
@@ -125,15 +126,17 @@ Node strips types without checking them and ignores `tsconfig.json`, so these ru
 - `src/prompts.ts` — the real `@inquirer/prompts` prompts. A thin wrapper with no test of its own; it is checked by running the built tool.
 - `src/progress.ts` — the `ora` spinner, plain when `NO_COLOR` is set
 - `src/colors.ts` — chalk, off when `NO_COLOR` is set
-- `src/format.ts` — the agent list lines, the skill list lines and one skill's details
+- `src/format.ts` — the agent list lines, the skill list lines, one skill's details, one agent's details and the "Installed in … on …" line
 - `src/agents/registry.ts` — the five agents and their detection signals and skill paths
 - `src/agents/scan.ts` — the scan of home, `PATH`, and Applications
 - `src/skills/skill.ts` — read and validate `SKILL.md`
 - `src/skills/install.ts` — check destinations, copy, and roll back
-- `src/skills/list.ts` — find the valid skills installed in each agent's skills folder, grouped by name
+- `src/skills/list.ts` — find the valid skills installed in each agent's skills folder, grouped by name, with each copy's creation date
 - `src/skills/uninstall.ts` — check every destination, then remove the skill folders
 - `src/list-skills-command.ts` — the `skills` command: scan, list, print. It also holds the scan-and-read step that browsing shares. Output is passed in, so tests use fakes.
-- `src/browse-skills-command.ts` — the menu's list skills flow: choose a skill, show its details, ask again until the user presses Esc. Prompts and output are passed in, so tests use fakes.
+- `src/found-agents.ts` — the agents the scan found, or an error when there are none. Shared by the list flows.
+- `src/browse-agents-command.ts` — the menu's agents flow: choose a found agent, show its folder and skills, then stop. Prompts and output are passed in, so tests use fakes.
+- `src/browse-skills-command.ts` — the menu's list skills flow: choose a skill, show its details, then stop. Prompts and output are passed in, so tests use fakes.
 - `src/uninstall-command.ts` — the uninstall flow: list, choose, confirm, remove, report. Prompts, spinner, and output are passed in, so tests use fakes.
 - `src/**/*.test.ts` — one test file beside each module above that has tests, using a temporary home directory
 - `src/test-support.ts` — shared test helpers, excluded from the build

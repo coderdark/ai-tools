@@ -1,6 +1,4 @@
-import chalk, { type ChalkInstance } from "chalk";
 import { UsageError } from "./install-command.ts";
-import { formatUserError, isUserError } from "./user-error.ts";
 
 export interface MenuAction {
   name: string;
@@ -17,55 +15,47 @@ export type MenuEntry = MenuAction | MenuGroup;
 export interface MenuRequest {
   title: string;
   entries: MenuEntry[];
-  leaveLabel: string;
-  /** True in a group, where Esc can leave. The top level has no Back, so Esc does nothing there. */
-  canGoBack: boolean;
+  /** True for the first menu. Leaving it ends the tool; leaving a group goes back to the menu above. */
+  isTopLevel: boolean;
 }
 
 export interface MenuDeps {
   title: string;
   entries: MenuEntry[];
-  /** Resolves to the chosen entry, or undefined when the user picked Exit or Back. */
+  /** Resolves to the chosen entry, or undefined when the user left the menu (Esc, or Back in a group). */
   choose(request: MenuRequest): Promise<MenuEntry | undefined>;
   interactive: boolean;
-  print(line: string): void;
-  printError(line: string): void;
-  colors?: ChalkInstance;
 }
 
 function isGroup(entry: MenuEntry): entry is MenuGroup {
   return "entries" in entry;
 }
 
-async function runAction(action: MenuAction, { printError, colors = chalk }: MenuDeps): Promise<void> {
-  try {
-    await action.run();
-  } catch (error) {
-    if (!isUserError(error)) {
-      throw error;
-    }
-
-    printError(formatUserError(error, colors));
-  }
-}
-
+/** Resolves to true when an action ran, and to false when the user left this level without choosing one. */
 async function runLevel(
   title: string,
   entries: MenuEntry[],
-  canGoBack: boolean,
+  isTopLevel: boolean,
   deps: MenuDeps,
-): Promise<void> {
-  const request = { title, entries, canGoBack, leaveLabel: canGoBack ? "Back" : "Exit" };
+): Promise<boolean> {
+  const request = { title, entries, isTopLevel };
 
-  for (let entry = await deps.choose(request); entry; entry = await deps.choose(request)) {
-    if (isGroup(entry)) {
-      await runLevel(entry.name, entry.entries, true, deps);
+  while (true) {
+    const entry = await deps.choose(request);
 
-      continue;
+    if (!entry) {
+      return false;
     }
 
-    await runAction(entry, deps);
-    deps.print("");
+    if (!isGroup(entry)) {
+      await entry.run();
+
+      return true;
+    }
+
+    if (await runLevel(entry.name, entry.entries, false, deps)) {
+      return true;
+    }
   }
 }
 
@@ -74,5 +64,5 @@ export async function runMenu(deps: MenuDeps): Promise<void> {
     throw new UsageError("the menu needs a terminal. Run a command instead, such as `skills`");
   }
 
-  await runLevel(deps.title, deps.entries, false, deps);
+  await runLevel(deps.title, deps.entries, true, deps);
 }

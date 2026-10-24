@@ -1,7 +1,7 @@
 import chalk, { type ChalkInstance } from "chalk";
 import type { ScanResult } from "./agents/scan.ts";
+import { findFoundAgents } from "./found-agents.ts";
 import { formatSkillList } from "./format.ts";
-import { SelectionError } from "./selection.ts";
 import { listInstalledSkills, type InstalledSkill } from "./skills/list.ts";
 
 export interface ListSkillsDeps {
@@ -13,13 +13,7 @@ export interface ListSkillsDeps {
 export const NO_SKILLS_MESSAGE = "No skills are installed in the agents that were found.";
 
 export async function findInstalledSkills(scan: () => ScanResult[]): Promise<InstalledSkill[]> {
-  const found = scan().filter((result) => result.found);
-
-  if (found.length === 0) {
-    throw new SelectionError("no agents were found on this computer");
-  }
-
-  return listInstalledSkills(found);
+  return listInstalledSkills(findFoundAgents(scan));
 }
 
 export async function runListSkills({ scan, print, colors = chalk }: ListSkillsDeps): Promise<void> {

@@ -31,19 +31,23 @@ The package defines a command named `ai-tools`. The examples below use `node dis
 
 ## Use it
 
-Run it with no command to get a menu. It has two entries: **Skills** (list, install and uninstall) and **Agents** (list). The menu stays open after each action, so you can do several things in one session. Choose **Back** to leave the Skills menu and **Exit** to leave the tool, or press Ctrl+C:
+Run it with no command to get a menu. It has two entries: **Skills** (list, install and uninstall) and **Agents** (list). The menu runs one action and then the tool exits, the same as the matching command. In the Skills menu, choose **Back** (or press Esc) to return to the top menu. Press Esc at the top menu, or Ctrl+C, to leave without doing anything:
 
 ```sh
 node dist/cli.js
 ```
 
-In the menu, **List skills** opens a list you move through with the arrow keys. The line under the highlighted skill shows which agents have it. Press Enter on a skill to see its folders. Press Esc to leave the list.
+In the menu, **List skills** opens a list you move through with the arrow keys. The line under the highlighted skill shows which agents have it and the date it was installed. Press Enter on a skill to see each agent's date and folder; the tool then exits. Press Esc to leave without choosing.
 
-Esc also goes back from the Skills menu, and it cancels the skill list in uninstall. At the top menu Esc does nothing, so you cannot close the tool by accident. Choose **Exit** or press Ctrl+C there.
+In the menu, **Agents** opens a list of only the agents that were found. The line under the highlighted agent shows its skills folder. Press Enter on an agent to see the skills installed in it, each with its date; the tool then exits. Press Esc to leave without choosing.
 
-The menu needs a terminal. In a script it stops with an error, so use a command such as `skills` there. If an action fails, for example because a skill already exists, the error shows in red and you go back to the menu.
+Esc also goes back from the Skills menu, and it cancels the skill list in uninstall. At the top menu, whose footer reads `esc exit`, Esc leaves the tool.
 
-List the agents that were found:
+The tool does not record when it installs a skill, so the date is the creation date of the skill's folder in each agent's skills folder. For a skill added as a symlink it is the date of the link. If you copy or move a skill folder yourself, the date is the date of the copy. On Linux some file systems do not keep creation dates, so the date may be wrong there (not tested). The uninstall list shows the same dates.
+
+The menu needs a terminal. In a script it stops with an error, so use a command such as `skills` there. If an action fails, for example because a skill already exists, the error shows in red and the tool exits with code 1, the same as a command.
+
+List the agents that were found. The command prints every agent, found or missing, as plain text for scripts. The menu's **Agents** shows only the found ones:
 
 ```sh
 node dist/cli.js agents
@@ -126,7 +130,7 @@ The whole folder is copied, except any `.git` folder. The original is not moved 
 
 ## Output
 
-Colors turn off when the output isn't a terminal, or when `NO_COLOR` is set. With `NO_COLOR` set, the spinner is replaced by plain lines. Press Ctrl+C at any question to quit. The tool exits with 0 on success or when you choose Exit, 1 on an error and 130 when you quit with Ctrl+C.
+Colors turn off when the output isn't a terminal, or when `NO_COLOR` is set. With `NO_COLOR` set, the spinner is replaced by plain lines. Press Ctrl+C at any question to quit. The tool exits with 0 on success or when you leave with Esc, 1 on an error and 130 when you quit with Ctrl+C.
 
 ## Develop
 

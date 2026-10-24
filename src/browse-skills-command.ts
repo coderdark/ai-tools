@@ -30,14 +30,13 @@ export async function runBrowseSkills({
     return;
   }
 
-  let skill = await prompts.skill(installed);
+  const skill = await prompts.skill(installed);
 
-  while (skill) {
-    for (const line of formatSkillDetails(skill, colors)) {
-      print(line);
-    }
+  if (!skill) {
+    return;
+  }
 
-    print("");
-    skill = await prompts.skill(installed);
+  for (const line of formatSkillDetails(skill, colors)) {
+    print(line);
   }
 }

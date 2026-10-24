@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { defaultScanEnv, scanAgents } from "./agents/scan.ts";
+import { runBrowseAgents } from "./browse-agents-command.ts";
 import { runBrowseSkills } from "./browse-skills-command.ts";
 import { createColors } from "./colors.ts";
 import { formatAgentList } from "./format.ts";
@@ -10,6 +11,7 @@ import { createProgress } from "./progress.ts";
 import { buildProgram, type ProgramHandlers } from "./program.ts";
 import {
   chooseMenuEntry,
+  terminalBrowseAgentsPrompts,
   terminalBrowsePrompts,
   terminalPrompts,
   terminalUninstallPrompts,
@@ -58,6 +60,10 @@ function browseSkills(): Promise<void> {
   return runBrowseSkills({ scan, prompts: terminalBrowsePrompts, print, colors });
 }
 
+function browseAgents(): Promise<void> {
+  return runBrowseAgents({ scan, prompts: terminalBrowseAgentsPrompts, print, colors });
+}
+
 async function agents(): Promise<void> {
   for (const line of formatAgentList(scan(), colors)) {
     print(line);
@@ -73,7 +79,7 @@ const menuEntries: MenuEntry[] = [
       { name: "Uninstall a skill", run: uninstall },
     ],
   },
-  { name: "Agents", run: agents },
+  { name: "Agents", run: browseAgents },
 ];
 
 function menu(): Promise<void> {
@@ -82,9 +88,6 @@ function menu(): Promise<void> {
     entries: menuEntries,
     choose: chooseMenuEntry,
     interactive,
-    print,
-    printError: (line) => console.error(line),
-    colors,
   });
 }
 

@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Chalk } from "chalk";
 import { UsageError } from "./install-command.ts";
 import { runMenu, type MenuDeps, type MenuEntry, type MenuRequest } from "./menu.ts";
 import { SelectionError } from "./selection.ts";
@@ -9,27 +8,25 @@ const LEAVE = "leave";
 
 interface Log {
   events: string[];
-  output: string[];
-  errors: string[];
 }
 
 /**
  * Dependencies that answer from `script` in order: an entry name picks that entry in the
- * menu being shown, and "leave" picks Exit or Back. Everything is recorded in the log.
+ * menu being shown, and "leave" leaves it (Esc, or Back in a group). Everything is recorded in the log.
  */
 function makeDeps(
   script: string[],
   buildEntries: (log: Log) => MenuEntry[],
   overrides: Partial<MenuDeps> = {},
 ): { deps: MenuDeps; log: Log } {
-  const log: Log = { events: [], output: [], errors: [] };
+  const log: Log = { events: [] };
   const remaining = [...script];
 
   const deps: MenuDeps = {
     title: "What would you like to do?",
     entries: buildEntries(log),
-    choose: async ({ title, entries, leaveLabel }) => {
-      log.events.push(`menu: ${title} [${entries.map(({ name }) => name).join(", ")}] ${leaveLabel}`);
+    choose: async ({ title, entries }) => {
+      log.events.push(`menu: ${title} [${entries.map(({ name }) => name).join(", ")}]`);
 
       const next = remaining.shift();
 
@@ -46,9 +43,6 @@ function makeDeps(
       return entry;
     },
     interactive: true,
-    print: (line) => log.output.push(line),
-    printError: (line) => log.errors.push(line),
-    colors: new Chalk({ level: 0 }),
     ...overrides,
   };
 
@@ -64,22 +58,24 @@ function action(log: Log, name: string): MenuEntry {
   };
 }
 
-test("runMenu runs a chosen action and shows the menu again until Exit", async () => {
-  const { deps, log } = makeDeps(["Agents", "Agents", LEAVE], (events) => [action(events, "Agents")]);
+test("runMenu runs the chosen action once and then ends", async () => {
+  const { deps, log } = makeDeps(["Agents"], (events) => [action(events, "Agents")]);
 
   await runMenu(deps);
 
-  assert.deepEqual(log.events, [
-    "menu: What would you like to do? [Agents] Exit",
-    "run: Agents",
-    "menu: What would you like to do? [Agents] Exit",
-    "run: Agents",
-    "menu: What would you like to do? [Agents] Exit",
-  ]);
+  assert.deepEqual(log.events, ["menu: What would you like to do? [Agents]", "run: Agents"]);
 });
 
-test("runMenu opens a group, stays in it after an action, and returns on Back", async () => {
-  const { deps, log } = makeDeps(["Skills", "List", "List", LEAVE, "Agents", LEAVE], (events) => [
+test("runMenu ends without running anything when the user leaves the top menu", async () => {
+  const { deps, log } = makeDeps([LEAVE], (events) => [action(events, "Agents")]);
+
+  await runMenu(deps);
+
+  assert.deepEqual(log.events, ["menu: What would you like to do? [Agents]"]);
+});
+
+test("runMenu opens a group and runs the chosen action once", async () => {
+  const { deps, log } = makeDeps(["Skills", "List"], (events) => [
     { name: "Skills", entries: [action(events, "List"), action(events, "Install")] },
     action(events, "Agents"),
   ]);
@@ -87,34 +83,47 @@ test("runMenu opens a group, stays in it after an action, and returns on Back", 
   await runMenu(deps);
 
   assert.deepEqual(log.events, [
-    "menu: What would you like to do? [Skills, Agents] Exit",
-    "menu: Skills [List, Install] Back",
+    "menu: What would you like to do? [Skills, Agents]",
+    "menu: Skills [List, Install]",
     "run: List",
-    "menu: Skills [List, Install] Back",
-    "run: List",
-    "menu: Skills [List, Install] Back",
-    "menu: What would you like to do? [Skills, Agents] Exit",
+  ]);
+});
+
+test("runMenu goes back from a group to the menu above it", async () => {
+  const { deps, log } = makeDeps(["Skills", LEAVE, "Agents"], (events) => [
+    { name: "Skills", entries: [action(events, "List")] },
+    action(events, "Agents"),
+  ]);
+
+  await runMenu(deps);
+
+  assert.deepEqual(log.events, [
+    "menu: What would you like to do? [Skills, Agents]",
+    "menu: Skills [List]",
+    "menu: What would you like to do? [Skills, Agents]",
     "run: Agents",
-    "menu: What would you like to do? [Skills, Agents] Exit",
   ]);
 });
 
 test("runMenu supports groups inside groups", async () => {
-  const { deps, log } = makeDeps(["Outer", "Inner", "Deep", LEAVE, LEAVE, LEAVE], (events) => [
+  const { deps, log } = makeDeps(["Outer", "Inner", LEAVE, "Inner", "Deep"], (events) => [
     { name: "Outer", entries: [{ name: "Inner", entries: [action(events, "Deep")] }] },
   ]);
 
   await runMenu(deps);
 
-  assert.deepEqual(
-    log.events.filter((event) => event.startsWith("run")),
-    ["run: Deep"],
-  );
-  assert.equal(log.events.at(-1), "menu: What would you like to do? [Outer] Exit");
+  assert.deepEqual(log.events, [
+    "menu: What would you like to do? [Outer]",
+    "menu: Outer [Inner]",
+    "menu: Inner [Deep]",
+    "menu: Outer [Inner]",
+    "menu: Inner [Deep]",
+    "run: Deep",
+  ]);
 });
 
-test("runMenu prints a user error in red and stays at the same menu", async () => {
-  const { deps, log } = makeDeps(["Skills", "Install", LEAVE, LEAVE], () => [
+test("runMenu passes on an error from an action, including a user error", async () => {
+  const { deps } = makeDeps(["Skills", "Install"], () => [
     {
       name: "Skills",
       entries: [
@@ -128,29 +137,11 @@ test("runMenu prints a user error in red and stays at the same menu", async () =
     },
   ]);
 
-  await runMenu(deps);
-
-  assert.deepEqual(log.errors, ["Error: no agents were found on this computer"]);
-  assert.deepEqual(log.events.slice(-3), [
-    "menu: Skills [Install] Back",
-    "menu: Skills [Install] Back",
-    "menu: What would you like to do? [Skills] Exit",
-  ]);
-});
-
-test("runMenu stops on an unexpected error from an action", async () => {
-  const { deps, log } = makeDeps(["Boom", LEAVE], () => [
-    {
-      name: "Boom",
-      run: async () => {
-        throw new Error("boom");
-      },
-    },
-  ]);
-
-  await assert.rejects(runMenu(deps), /boom/);
-  assert.equal(log.events.length, 1);
-  assert.deepEqual(log.errors, []);
+  await assert.rejects(
+    runMenu(deps),
+    (error: unknown) =>
+      error instanceof SelectionError && /no agents were found on this computer/.test(error.message),
+  );
 });
 
 test("runMenu stops when the user cancels a prompt with Ctrl+C", async () => {
@@ -179,27 +170,7 @@ test("runMenu refuses to start without a terminal", async () => {
   assert.deepEqual(log.events, []);
 });
 
-test("runMenu prints a blank line after each action, but not when opening or leaving a group", async () => {
-  const { deps, log } = makeDeps(["Skills", "List", LEAVE, LEAVE], () => [
-    {
-      name: "Skills",
-      entries: [
-        {
-          name: "List",
-          run: async () => {
-            log.output.push("alpha  Claude");
-          },
-        },
-      ],
-    },
-  ]);
-
-  await runMenu(deps);
-
-  assert.deepEqual(log.output, ["alpha  Claude", ""]);
-});
-
-test("runMenu tells the chooser that only a group can be left with Esc", async () => {
+test("runMenu tells the chooser which menu is the top level", async () => {
   const requests: MenuRequest[] = [];
   const { deps } = makeDeps(
     [],
@@ -216,7 +187,7 @@ test("runMenu tells the chooser that only a group can be left with Esc", async (
   await runMenu(deps);
 
   assert.deepEqual(
-    requests.map(({ title, canGoBack }) => `${title}: ${canGoBack}`),
-    ["What would you like to do?: false", "Skills: true", "What would you like to do?: false"],
+    requests.map(({ title, isTopLevel }) => `${title}: ${isTopLevel}`),
+    ["What would you like to do?: true", "Skills: false", "What would you like to do?: true"],
   );
 });

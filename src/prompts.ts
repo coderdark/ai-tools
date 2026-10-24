@@ -3,11 +3,12 @@ import { resolve } from "node:path";
 import { styleText } from "node:util";
 import type { AgentId } from "./agents/registry.ts";
 import { buildAgentChoices, toSelectionRequest, type AgentChoiceValue } from "./agent-choices.ts";
+import type { BrowseAgentsPrompts } from "./browse-agents-command.ts";
 import type { BrowseSkillsPrompts } from "./browse-skills-command.ts";
 import { runUntilEscape } from "./escape.ts";
+import { formatInstalledIn } from "./format.ts";
 import type { InstallPrompts } from "./install-command.ts";
 import type { MenuEntry, MenuRequest } from "./menu.ts";
-import type { InstalledSkill } from "./skills/list.ts";
 import { readSkill } from "./skills/skill.ts";
 import type { UninstallPrompts } from "./uninstall-command.ts";
 
@@ -18,28 +19,32 @@ async function validateSkillDir(value: string): Promise<true | string> {
   );
 }
 
-function describeInstalledIn({ targets }: InstalledSkill): string {
-  return `Installed in ${targets.map(({ agent }) => agent.name).join(", ")}`;
-}
-
 const LEAVE_ROW = -1;
 
 type SelectConfig<Value> = Parameters<typeof select<Value>>[0];
 
-function keysHelpTipWithEscape(keys: [key: string, action: string][]): string {
-  const allKeys: [key: string, action: string][] = [...keys, ["esc", "back"]];
+function keysHelpTipWithEscape(escapeLabel: string) {
+  return (keys: [key: string, action: string][]): string => {
+    const allKeys: [key: string, action: string][] = [...keys, ["esc", escapeLabel]];
 
-  return allKeys
-    .map(([key, action]) => `${styleText("bold", key)} ${styleText("dim", action)}`)
-    .join(styleText("dim", " • "));
+    return allKeys
+      .map(([key, action]) => `${styleText("bold", key)} ${styleText("dim", action)}`)
+      .join(styleText("dim", " • "));
+  };
 }
 
-/** A list where Esc cancels the choice. Resolves to `undefined` when the user pressed Esc. */
-function selectWithEscape<Value>(config: SelectConfig<Value>): Promise<Value | undefined> {
+/**
+ * A list where Esc cancels the choice, and the footer names what Esc does.
+ * Resolves to `undefined` when the user pressed Esc.
+ */
+function selectWithEscape<Value>(
+  config: SelectConfig<Value>,
+  escapeLabel = "back",
+): Promise<Value | undefined> {
   return runUntilEscape(
     (signal) =>
       select<Value>(
-        { ...config, theme: { style: { keysHelpTip: keysHelpTipWithEscape } } },
+        { ...config, theme: { style: { keysHelpTip: keysHelpTipWithEscape(escapeLabel) } } },
         { signal },
       ),
     process.stdin,
@@ -82,7 +87,7 @@ export const terminalUninstallPrompts: UninstallPrompts = {
       choices: skills.map((skill) => ({
         name: skill.name,
         value: skill.name,
-        description: describeInstalledIn(skill),
+        description: formatInstalledIn(skill),
       })),
     });
   },
@@ -110,34 +115,54 @@ export const terminalUninstallPrompts: UninstallPrompts = {
 
 export const terminalBrowsePrompts: BrowseSkillsPrompts = {
   async skill(skills) {
-    const index = await selectWithEscape<number>({
-      message: "Which skill do you want to look at?",
-      choices: skills.map((skill, position) => ({
-        name: skill.name,
-        value: position,
-        description: describeInstalledIn(skill),
-      })),
-    });
+    const index = await selectWithEscape<number>(
+      {
+        message: "Which skill do you want to look at?",
+        choices: skills.map((skill, position) => ({
+          name: skill.name,
+          value: position,
+          description: formatInstalledIn(skill),
+        })),
+      },
+      "exit",
+    );
 
     return index === undefined ? undefined : skills[index];
+  },
+};
+
+export const terminalBrowseAgentsPrompts: BrowseAgentsPrompts = {
+  async agent(found) {
+    const index = await selectWithEscape<number>(
+      {
+        message: "Which agent do you want to look at?",
+        choices: found.map(({ agent, skillsDir }, position) => ({
+          name: agent.name,
+          value: position,
+          description: skillsDir,
+        })),
+      },
+      "exit",
+    );
+
+    return index === undefined ? undefined : found[index];
   },
 };
 
 export async function chooseMenuEntry({
   title,
   entries,
-  leaveLabel,
-  canGoBack,
+  isTopLevel,
 }: MenuRequest): Promise<MenuEntry | undefined> {
-  const config: SelectConfig<number> = {
-    message: title,
-    choices: [
-      ...entries.map(({ name }, position) => ({ name, value: position })),
-      { name: leaveLabel, value: LEAVE_ROW },
-    ],
-  };
+  const choices = entries.map(({ name }, position) => ({ name, value: position }));
 
-  const index = canGoBack ? await selectWithEscape<number>(config) : await select<number>(config);
+  const index = await selectWithEscape<number>(
+    {
+      message: title,
+      choices: isTopLevel ? choices : [...choices, { name: "Back", value: LEAVE_ROW }],
+    },
+    isTopLevel ? "exit" : "back",
+  );
 
   return index === undefined || index === LEAVE_ROW ? undefined : entries[index];
 }

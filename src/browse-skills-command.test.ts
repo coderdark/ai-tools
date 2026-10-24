@@ -73,7 +73,7 @@ test("runBrowseSkills offers the installed skills in alphabetical order", async 
   assert.deepEqual(recorded.listsShown, [["alpha", "review-pr"]]);
 });
 
-test("runBrowseSkills prints nothing when the user goes straight back", async (t) => {
+test("runBrowseSkills prints nothing when the user leaves without choosing", async (t) => {
   const results = await setup(t, { claude: ["alpha"] });
   const { deps, recorded } = makeDeps(results, [undefined]);
 
@@ -82,7 +82,7 @@ test("runBrowseSkills prints nothing when the user goes straight back", async (t
   assert.deepEqual(recorded.output, []);
 });
 
-test("runBrowseSkills shows the details of the chosen skill and then offers the list again", async (t) => {
+test("runBrowseSkills shows the details of the chosen skill and does not offer the list again", async (t) => {
   const results = await setup(t, { claude: ["review-pr", "alpha"], cursor: ["review-pr"] });
   const { deps, recorded } = makeDeps(results, ["review-pr", "alpha", undefined]);
   const claude = results.find(({ agent }) => agent.id === "claude");
@@ -92,16 +92,14 @@ test("runBrowseSkills shows the details of the chosen skill and then offers the 
 
   await runBrowseSkills(deps);
 
-  assert.deepEqual(recorded.output, [
+  const withoutDates = recorded.output.map((line) => line.replace(/\d{4}-\d{2}-\d{2}/, "<date>"));
+
+  assert.deepEqual(withoutDates, [
     "review-pr",
-    `  Cursor  ${join(cursor.skillsDir, "review-pr")}`,
-    `  Claude  ${join(claude.skillsDir, "review-pr")}`,
-    "",
-    "alpha",
-    `  Claude  ${join(claude.skillsDir, "alpha")}`,
-    "",
+    `  Cursor  <date>  ${join(cursor.skillsDir, "review-pr")}`,
+    `  Claude  <date>  ${join(claude.skillsDir, "review-pr")}`,
   ]);
-  assert.equal(recorded.listsShown.length, 3);
+  assert.equal(recorded.listsShown.length, 1);
 });
 
 test("runBrowseSkills says so, without asking, when no skills are installed", async (t) => {
